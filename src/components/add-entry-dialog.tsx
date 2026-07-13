@@ -43,6 +43,7 @@ export function AddEntryDialog({ date }: AddEntryDialogProps) {
     fat?: number;
     grams: number;
     source: "barcode" | "search" | "ai";
+    aiDetails?: Record<string, any>;
   }) => addEntryMutation.mutate({ data });
 
   return (
@@ -104,6 +105,7 @@ function AIPhotoTab({
     fat?: number;
     grams: number;
     source: "ai";
+    aiDetails?: Record<string, any>;
   }) => void;
   onClose: () => void;
 }) {
@@ -153,6 +155,7 @@ function AIPhotoTab({
       fat: result.fat,
       grams: result.grams || 100,
       source: "ai",
+      aiDetails: result,
     });
     onClose();
   };

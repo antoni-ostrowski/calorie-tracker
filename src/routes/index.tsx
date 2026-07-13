@@ -10,15 +10,35 @@ import {
   Trash2,
   Sparkles,
   Utensils,
+  ChevronDown,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Progress } from "~/components/ui/progress";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { getDayByDate, deleteEntry } from "~/lib/api";
+import { cn } from "~/lib/utils";
+import type { Entry } from "~/db/schema";
 
 function getDateString(date: Date) {
   return format(date, "yyyy-MM-dd");
 }
+
+const SOURCE_LABELS: Record<Entry["source"], string> = {
+  ai: "AI Photo Estimation",
+  barcode: "Barcode Scanned",
+  search: "Manually Searched",
+};
 
 function IndexPage() {
   const { date: urlDate } = Route.useSearch();
@@ -60,7 +80,12 @@ function IndexPage() {
   const isToday = dateStr === getDateString(new Date());
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col bg-background">
+    <div
+      className={cn(
+        "mx-auto flex min-h-screen max-w-md flex-col",
+        isToday ? "bg-background" : "bg-muted/50",
+      )}
+    >
       {/* Header */}
       <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="flex items-center justify-between px-4 py-3">
@@ -72,10 +97,18 @@ function IndexPage() {
           </button>
 
           <div className="flex flex-col items-center">
-            <button onClick={goToToday} className="text-sm font-medium text-muted-foreground">
+            <span className="text-sm font-medium text-muted-foreground">
               {isToday ? "Today" : format(currentDate, "EEEE")}
-            </button>
+            </span>
             <span className="text-lg font-bold">{format(currentDate, "MMM d")}</span>
+            {!isToday && (
+              <button
+                onClick={goToToday}
+                className="mt-0.5 text-[10px] font-semibold text-primary hover:underline"
+              >
+                Jump to today
+              </button>
+            )}
           </div>
 
           <button
@@ -118,31 +151,11 @@ function IndexPage() {
         ) : day?.entries && day.entries.length > 0 ? (
           <div className="flex flex-col gap-2">
             {day.entries.map((entry) => (
-              <div
+              <EntryCard
                 key={entry.id}
-                className="flex items-center justify-between rounded-xl border bg-card p-3"
-              >
-                <div className="flex flex-col">
-                  <span className="font-medium">{entry.name}</span>
-                  <span className="text-xs text-muted-foreground">
-                    {Math.round(entry.grams)}g · {Math.round(entry.calories)} kcal
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs">
-                    {entry.source === "ai" && <Sparkles className="mr-1 size-3" />}
-                    {entry.source === "barcode" && <ScanBarcode className="mr-1 size-3" />}
-                    {entry.source === "search" && <Search className="mr-1 size-3" />}
-                    {Math.round(entry.calories)}
-                  </Badge>
-                  <button
-                    onClick={() => removeEntryMutation.mutate({ data: { id: entry.id! } })}
-                    className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
-                </div>
-              </div>
+                entry={entry}
+                onDelete={() => removeEntryMutation.mutate({ data: { id: entry.id! } })}
+              />
             ))}
           </div>
         ) : (
@@ -155,6 +168,120 @@ function IndexPage() {
       </div>
     </div>
   );
+}
+
+function EntryCard({ entry, onDelete }: { entry: Entry; onDelete: () => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const aiDetails = parseAiDetails(entry);
+
+  return (
+    <div className="rounded-xl border bg-card">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center justify-between p-3 text-left"
+      >
+        <div className="flex flex-col">
+          <span className="font-medium">{entry.name}</span>
+          <span className="text-xs text-muted-foreground">
+            {Math.round(entry.grams)}g · {Math.round(entry.calories)} kcal
+          </span>
+          <span className="mt-1 text-[10px] tabular-nums text-muted-foreground">
+            {format(entry.createdAt, "P p")}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs">
+            {entry.source === "ai" && <Sparkles className="mr-1 size-3" />}
+            {entry.source === "barcode" && <ScanBarcode className="mr-1 size-3" />}
+            {entry.source === "search" && <Search className="mr-1 size-3" />}
+            {Math.round(entry.calories)}
+          </Badge>
+          <div className="flex items-center gap-1">
+            <DeleteButton onConfirm={onDelete} />
+            <ChevronDown
+              className={`size-4 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+            />
+          </div>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t px-3 pb-3 pt-2">
+          <p className="text-xs font-medium text-foreground">{SOURCE_LABELS[entry.source]}</p>
+
+          {entry.source === "ai" && aiDetails && (
+            <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+              {aiDetails.confidence && (
+                <p>
+                  <span className="font-medium">Confidence:</span> {aiDetails.confidence}
+                </p>
+              )}
+              {(aiDetails.protein || aiDetails.carbs || aiDetails.fat) && (
+                <p>
+                  <span className="font-medium">Macros:</span>{" "}
+                  {["protein", "carbs", "fat"]
+                    .map((key) =>
+                      aiDetails[key] != null ? `${key}: ${Math.round(aiDetails[key])}g` : null,
+                    )
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              )}
+              {aiDetails.reasoning && (
+                <p>
+                  <span className="font-medium">Reasoning:</span> {aiDetails.reasoning}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <button
+          onClick={(e) => e.stopPropagation()}
+          className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+        >
+          <Trash2 className="size-4" />
+        </button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete entry?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently remove the entry. Cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              onConfirm();
+            }}
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+function parseAiDetails(entry: Entry) {
+  if (!entry.aiDetails) return null;
+  try {
+    return JSON.parse(entry.aiDetails) as Record<string, any>;
+  } catch {
+    return null;
+  }
 }
 
 export const Route = createFileRoute("/")({

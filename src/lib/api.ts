@@ -93,6 +93,7 @@ export const createEntry = createServerFn({ method: "POST" })
       fat: z.number().optional(),
       grams: z.number().min(0).default(100),
       source: z.enum(["barcode", "search", "ai"]),
+      aiDetails: z.record(z.any()).optional(),
     }),
   )
   .handler(async ({ data }) => {
@@ -127,6 +128,7 @@ export const createEntry = createServerFn({ method: "POST" })
         fat: data.fat,
         grams: data.grams,
         source: data.source,
+        aiDetails: data.aiDetails ? JSON.stringify(data.aiDetails) : undefined,
       })
       .returning();
 

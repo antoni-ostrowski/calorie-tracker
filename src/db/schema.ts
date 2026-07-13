@@ -41,6 +41,7 @@ export const entries = sqliteTable("entries", {
   source: text("source", {
     enum: ["barcode", "search", "ai"],
   }).notNull(),
+  aiDetails: text("ai_details"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

@@ -15,6 +15,13 @@
       "when": 1783940034892,
       "tag": "0001_clear_darwin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783941833559,
+      "tag": "0002_normal_proudstar",
+      "breakpoints": true
     }
   ]
 }

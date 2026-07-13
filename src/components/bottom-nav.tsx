@@ -35,7 +35,7 @@ export function BottomNav() {
               <TabsTrigger
                 key={tab.value}
                 value={tab.value}
-                className="flex flex-col items-center gap-0.5 rounded-xl px-4 py-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+                className="flex min-h-[3.5rem] flex-col items-center justify-center gap-1 rounded-xl px-5 py-2.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
               >
                 <tab.icon className="size-5" />
                 <span className="text-[10px] font-medium">{tab.label}</span>

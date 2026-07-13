@@ -1,0 +1,1 @@
+ALTER TABLE `entries` ADD `ai_details` text;
