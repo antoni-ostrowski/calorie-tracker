@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, addDays, subDays } from "date-fns";
 import {
@@ -52,6 +52,7 @@ function IndexPage() {
   const dateStr = getDateString(currentDate);
 
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: day, isLoading } = useQuery({
     queryKey: ["day", dateStr],
@@ -75,8 +76,10 @@ function IndexPage() {
 
   const goToPrevDay = () => setCurrentDate((d) => subDays(d, 1));
   const goToNextDay = () => setCurrentDate((d) => addDays(d, 1));
-  const goToToday = () => setCurrentDate(new Date());
-
+  const goToToday = () => {
+    navigate({ to: "/", search: {} });
+    setCurrentDate(new Date());
+  };
   const isToday = dateStr === getDateString(new Date());
 
   return (
