@@ -100,9 +100,6 @@ function SettingsPage() {
                     disabled={isLoading || saveMutation.isPending}
                     className="h-auto w-40 border-none bg-transparent px-0 py-0 text-center text-5xl font-bold tabular-nums tracking-tight text-foreground shadow-none focus-visible:ring-0"
                   />
-                  <span className="pointer-events-none absolute -right-8 top-1/2 -translate-y-1/2 text-sm font-medium text-muted-foreground">
-                    kcal
-                  </span>
                 </div>
                 <Button
                   variant="outline"
