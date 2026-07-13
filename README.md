@@ -80,3 +80,10 @@ bun run preview
 ```
 
 Then put it behind a reverse proxy like Caddy or nginx and you're good to go.
+
+
+## Media
+
+<img width="260" alt="image" src="https://github.com/user-attachments/assets/b4ae0037-598f-4296-b12a-921121288035" /> <img width="260" alt="image" src="https://github.com/user-attachments/assets/29ba2ab9-a2a1-43ef-aebc-82d1572120a1" />
+<img width="260" alt="image" src="https://github.com/user-attachments/assets/8bc5d3a1-ed63-46a1-bab4-fe74a6750625" />
+
