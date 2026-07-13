@@ -22,6 +22,13 @@
       "when": 1783941833559,
       "tag": "0002_normal_proudstar",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1783944706032,
+      "tag": "0003_quiet_shiver_man",
+      "breakpoints": true
     }
   ]
 }

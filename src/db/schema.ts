@@ -42,6 +42,7 @@ export const entries = sqliteTable("entries", {
     enum: ["barcode", "search", "ai"],
   }).notNull(),
   aiDetails: text("ai_details"),
+  filePath: text("file_path"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

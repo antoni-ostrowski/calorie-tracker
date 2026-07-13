@@ -4,6 +4,7 @@ import { z } from "zod";
 import { db } from "~/db";
 import { days, entries, settings } from "~/db/schema";
 import { env } from "~/env";
+import fs from "fs/promises";
 
 async function getOrCreateSettings() {
   let row = await db.query.settings.findFirst();
@@ -94,6 +95,7 @@ export const createEntry = createServerFn({ method: "POST" })
       grams: z.number().min(0).default(100),
       source: z.enum(["barcode", "search", "ai"]),
       aiDetails: z.record(z.any()).optional(),
+      photoStr: z.string().optional().nullable(),
     }),
   )
   .handler(async ({ data }) => {
@@ -117,6 +119,28 @@ export const createEntry = createServerFn({ method: "POST" })
       day = newDay;
     }
 
+    const { photoStr } = data;
+    let filePath = "";
+    try {
+      if (photoStr) {
+        const mimeMatch = photoStr.match(/^data:image\/(\w+);base64,/);
+        const ext = mimeMatch?.[1] ?? "jpg";
+        const baseName = data.name
+          .trim()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-zA-Z0-9-_]/g, "");
+        const fileName = `${Date.now()}-${baseName}.${ext}`;
+        const outDir = "public/data/photos";
+        await fs.mkdir(outDir, { recursive: true });
+        filePath = `/data/photos/${fileName}`;
+        const cleanBase64 = photoStr.replace(/^data:image\/\w+;base64,/, "");
+        const imageBuffer = Buffer.from(cleanBase64, "base64");
+        await fs.writeFile(`${outDir}/${fileName}`, imageBuffer);
+      }
+    } catch (e) {
+      console.error("[createEntry] failed to save photo: ", e);
+    }
+
     const [entry] = await db
       .insert(entries)
       .values({
@@ -129,10 +153,12 @@ export const createEntry = createServerFn({ method: "POST" })
         grams: data.grams,
         source: data.source,
         aiDetails: data.aiDetails ? JSON.stringify(data.aiDetails) : undefined,
+        filePath,
       })
       .returning();
 
     console.log("[createEntry] created entry", { entryId: entry.id, dayId: day.id });
+
     return entry;
   });
 

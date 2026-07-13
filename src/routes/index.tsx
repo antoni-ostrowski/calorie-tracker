@@ -176,37 +176,51 @@ function IndexPage() {
 function EntryCard({ entry, onDelete }: { entry: Entry; onDelete: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const aiDetails = parseAiDetails(entry);
+  const photoSrc = entry.filePath?.replace(/^\.\/data\/photos\//, "/data/photos/");
 
   return (
-    <div className="rounded-xl border bg-card">
-      <button
+    <div className="rounded-xl border bg-card ">
+      <div
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center justify-between p-3 text-left"
+        className="flex w-full items-center justify-between p-3 text-left gap-4"
       >
-        <div className="flex flex-col">
-          <span className="font-medium">{entry.name}</span>
-          <span className="text-xs text-muted-foreground">
-            {Math.round(entry.grams)}g · {Math.round(entry.calories)} kcal
-          </span>
-          <span className="mt-1 text-[10px] tabular-nums text-muted-foreground">
-            {format(entry.createdAt, "P p")}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs">
-            {entry.source === "ai" && <Sparkles className="mr-1 size-3" />}
-            {entry.source === "barcode" && <ScanBarcode className="mr-1 size-3" />}
-            {entry.source === "search" && <Search className="mr-1 size-3" />}
-            {Math.round(entry.calories)}
-          </Badge>
-          <div className="flex items-center gap-1">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-row gap-2">
+            {photoSrc && (
+              <img
+                src={photoSrc}
+                alt={entry.name}
+                className="size-12 shrink-0 rounded-md border bg-muted object-cover"
+              />
+            )}
+            <div className="flex flex-col">
+              <span className="font-medium">{entry.name}</span>
+              <span className="text-xs text-muted-foreground">
+                {Math.round(entry.grams)}g · {Math.round(entry.calories)} kcal
+              </span>
+              <span className="mt-1 text-[10px] tabular-nums text-muted-foreground">
+                {format(entry.createdAt, "P p")}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex justify-between gap-2 w-full flex-row">
+            <Badge variant="outline" className="text-xs">
+              {entry.source === "ai" && <Sparkles className=" size-3" />}
+              {entry.source === "barcode" && <ScanBarcode className=" size-3" />}
+              {entry.source === "search" && <Search className=" size-3" />}
+              {Math.round(entry.calories)}
+            </Badge>
+
+            <div className="flex items-center gap-1">
+              <ChevronDown
+                className={`size-4 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+              />
+            </div>
             <DeleteButton onConfirm={onDelete} />
-            <ChevronDown
-              className={`size-4 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
-            />
           </div>
         </div>
-      </button>
+      </div>
 
       {expanded && (
         <div className="border-t px-3 pb-3 pt-2">

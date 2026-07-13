@@ -20,6 +20,25 @@ interface AddEntryDialogProps {
   date: string;
 }
 
+export interface EntryData {
+  date: string;
+  name: string;
+  calories: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  grams: number;
+  source: "barcode" | "search" | "ai";
+  aiDetails?: Record<string, any>;
+  photoStr?: string | null;
+}
+
+interface TabProps {
+  date: string;
+  onAdd: (data: EntryData) => void;
+  onClose: () => void;
+}
+
 export function AddEntryDialog({ date }: AddEntryDialogProps) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -34,17 +53,7 @@ export function AddEntryDialog({ date }: AddEntryDialogProps) {
     onError: (err) => toast.error(err.message),
   });
 
-  const handleAdd = (data: {
-    date: string;
-    name: string;
-    calories: number;
-    protein?: number;
-    carbs?: number;
-    fat?: number;
-    grams: number;
-    source: "barcode" | "search" | "ai";
-    aiDetails?: Record<string, any>;
-  }) => addEntryMutation.mutate({ data });
+  const handleAdd = (data: EntryData) => addEntryMutation.mutate({ data });
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -90,25 +99,7 @@ export function AddEntryDialog({ date }: AddEntryDialogProps) {
   );
 }
 
-function AIPhotoTab({
-  date,
-  onAdd,
-  onClose,
-}: {
-  date: string;
-  onAdd: (data: {
-    date: string;
-    name: string;
-    calories: number;
-    protein?: number;
-    carbs?: number;
-    fat?: number;
-    grams: number;
-    source: "ai";
-    aiDetails?: Record<string, any>;
-  }) => void;
-  onClose: () => void;
-}) {
+function AIPhotoTab({ date, onAdd, onClose }: TabProps) {
   const [photo, setPhoto] = useState<string | null>(null);
   const [context, setContext] = useState("");
   const [result, setResult] = useState<any>(null);
@@ -156,6 +147,7 @@ function AIPhotoTab({
       grams: result.grams || 100,
       source: "ai",
       aiDetails: result,
+      photoStr: photo,
     });
     onClose();
   };
@@ -258,24 +250,7 @@ function AIPhotoTab({
   );
 }
 
-function BarcodeTab({
-  date,
-  onAdd,
-  onClose,
-}: {
-  date: string;
-  onAdd: (data: {
-    date: string;
-    name: string;
-    calories: number;
-    protein?: number;
-    carbs?: number;
-    fat?: number;
-    grams: number;
-    source: "barcode";
-  }) => void;
-  onClose: () => void;
-}) {
+function BarcodeTab({ date, onAdd, onClose }: TabProps) {
   const [barcode, setBarcode] = useState("");
   const [product, setProduct] = useState<any>(null);
   const [grams, setGrams] = useState(100);
@@ -399,24 +374,7 @@ function BarcodeTab({
   );
 }
 
-function SearchTab({
-  date,
-  onAdd,
-  onClose,
-}: {
-  date: string;
-  onAdd: (data: {
-    date: string;
-    name: string;
-    calories: number;
-    protein?: number;
-    carbs?: number;
-    fat?: number;
-    grams: number;
-    source: "search";
-  }) => void;
-  onClose: () => void;
-}) {
+function SearchTab({ date, onAdd, onClose }: TabProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [selected, setSelected] = useState<any>(null);
