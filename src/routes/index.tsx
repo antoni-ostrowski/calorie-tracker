@@ -35,7 +35,7 @@ function getDateString(date: Date) {
 }
 
 const SOURCE_LABELS: Record<Entry["source"], string> = {
-  ai: "AI Photo Estimation",
+  ai: "AI Estimation",
   barcode: "Barcode Scanned",
   search: "Manually Searched",
 };
@@ -70,6 +70,9 @@ function IndexPage() {
   });
 
   const totalCalories = day?.entries?.reduce((sum, e) => sum + (e.calories || 0), 0) || 0;
+  const totalProtein = day?.entries?.reduce((sum, e) => sum + (e.protein || 0), 0) || 0;
+  const totalCarbs = day?.entries?.reduce((sum, e) => sum + (e.carbs || 0), 0) || 0;
+  const totalFat = day?.entries?.reduce((sum, e) => sum + (e.fat || 0), 0) || 0;
   const goal = day?.calorieGoal || 2000;
   const progress = Math.min((totalCalories / goal) * 100, 100);
   const remaining = Math.max(goal - totalCalories, 0);
@@ -142,6 +145,10 @@ function IndexPage() {
           </div>
           <Progress value={progress} className="h-3" />
           <p className="mt-2 text-center text-xs text-muted-foreground">Goal: {goal} kcal</p>
+          <p className="mt-1 text-center text-xs text-muted-foreground">
+            P: {Math.round(totalProtein)}g · C: {Math.round(totalCarbs)}g · F:{" "}
+            {Math.round(totalFat)}g
+          </p>
         </div>
       </div>
 

@@ -67,8 +67,8 @@ Without `OPENCODE_API_KEY`, the app still works for barcode and manual search, b
 
 ### Directories
 
-- `data/` — this is where the SQLite database (`app.db`) lives. If you back up one folder, back up this one. 
-- `public/data/photos/` — this is where new food photos are saved and served from. 
+- `data/` — this is where the SQLite database (`app.db`) lives. If you back up one folder, back up this one.
+- `public/data/photos/` — this is where new food photos are saved and served from.
 
 ### Building without Docker
 
@@ -81,9 +81,7 @@ bun run preview
 
 Then put it behind a reverse proxy like Caddy or nginx and you're good to go.
 
-
 ## Media
 
 <img width="260" alt="image" src="https://github.com/user-attachments/assets/b4ae0037-598f-4296-b12a-921121288035" /> <img width="260" alt="image" src="https://github.com/user-attachments/assets/29ba2ab9-a2a1-43ef-aebc-82d1572120a1" />
 <img width="260" alt="image" src="https://github.com/user-attachments/assets/8bc5d3a1-ed63-46a1-bab4-fe74a6750625" />
-

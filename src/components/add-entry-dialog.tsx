@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { Plus, Camera, ScanBarcode, Search, Check, X, Loader2, Sparkles } from "lucide-react";
 import { Button } from "~/components/ui/button";
@@ -14,6 +14,7 @@ import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { toast } from "sonner";
+import { Html5QrcodeScanner } from "html5-qrcode";
 import { createEntry, lookupBarcode, searchFood, estimateWithAI } from "~/lib/api";
 
 interface AddEntryDialogProps {
@@ -255,12 +256,54 @@ function BarcodeTab({ date, onAdd, onClose }: TabProps) {
   const [product, setProduct] = useState<any>(null);
   const [grams, setGrams] = useState(100);
   const [loading, setLoading] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scannerError, setScannerError] = useState<string | null>(null);
+  const scannerId = useRef(`barcode-scanner-${Math.random().toString(36).slice(2)}`).current;
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const lookupStartedRef = useRef(false);
 
-  const handleLookup = async () => {
-    if (!barcode.trim()) return;
+  useEffect(() => {
+    if (!scanning) {
+      setScannerError(null);
+      return;
+    }
+
+    const element = document.getElementById(scannerId);
+    console.log("[barcode] start effect", { scannerId, elementFound: !!element });
+    if (!element) {
+      setScannerError(`Scanner element ${scannerId} not found`);
+      setScanning(false);
+      return;
+    }
+
+    const scanner = new Html5QrcodeScanner(scannerId, { fps: 10, qrbox: 250 }, false);
+    scannerRef.current = scanner;
+
+    scanner.render(
+      (decodedText) => {
+        if (lookupStartedRef.current) return;
+        lookupStartedRef.current = true;
+        console.log("[barcode] decoded", decodedText);
+        setBarcode(decodedText);
+        setScanning(false);
+        lookupProduct(decodedText);
+      },
+      () => {
+        // frame-level no-code errors are expected; ignored
+      },
+    );
+
+    return () => {
+      scannerRef.current = null;
+      scanner.clear().catch((e) => console.error("[barcode] cleanup error", e));
+    };
+  }, [scanning, scannerId]);
+
+  const lookupProduct = useCallback(async (code: string) => {
+    if (!code.trim()) return;
     setLoading(true);
     try {
-      const res = await lookupBarcode({ data: { barcode: barcode.trim() } });
+      const res = await lookupBarcode({ data: { barcode: code.trim() } });
       setProduct(res);
       setGrams(100);
     } catch (err: any) {
@@ -268,7 +311,21 @@ function BarcodeTab({ date, onAdd, onClose }: TabProps) {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const startScanner = () => {
+    console.log("[barcode] user requested scanner");
+    lookupStartedRef.current = false;
+    setScannerError(null);
+    setScanning(true);
   };
+
+  const stopScanner = () => {
+    console.log("[barcode] user cancelled scanner");
+    setScanning(false);
+  };
+
+  const handleLookup = () => lookupProduct(barcode);
 
   const handleAdd = () => {
     if (!product) return;
@@ -323,53 +380,45 @@ function BarcodeTab({ date, onAdd, onClose }: TabProps) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="barcode-input">Barcode</Label>
-        <div className="flex gap-2">
-          <Input
-            id="barcode-input"
-            placeholder="Type or scan barcode"
-            value={barcode}
-            onChange={(e) => setBarcode(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleLookup()}
+      {scanning ? (
+        <div className="flex flex-col gap-2">
+          <div
+            id={scannerId}
+            className="relative w-full min-h-[300px] rounded-lg overflow-hidden bg-black"
           />
-          <label className="flex shrink-0 cursor-pointer items-center justify-center rounded-md border px-3 hover:bg-muted">
-            <Camera className="size-5" />
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                if ("BarcodeDetector" in window) {
-                  const detector = new (window as any).BarcodeDetector({
-                    formats: ["ean_13", "ean_8", "upc_a", "upc_e"],
-                  });
-                  const img = await createImageBitmap(file);
-                  const codes = await detector.detect(img);
-                  if (codes.length > 0) {
-                    setBarcode(codes[0].rawValue);
-                    toast.success("Barcode detected");
-                  } else {
-                    toast.error("No barcode found in photo");
-                  }
-                } else {
-                  toast.error("Barcode scanning not supported. Please type the barcode.");
-                }
-              }}
-            />
-          </label>
+          <Button variant="outline" onClick={stopScanner}>
+            Cancel scanning
+          </Button>
         </div>
-      </div>
-      <Button onClick={handleLookup} disabled={loading || !barcode.trim()}>
-        {loading ? (
-          <Loader2 className="mr-2 size-4 animate-spin" />
-        ) : (
-          <Search className="mr-2 size-4" />
-        )}
-        Look Up
-      </Button>
+      ) : (
+        <>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="barcode-input">Barcode</Label>
+            <Input
+              id="barcode-input"
+              placeholder="Type barcode"
+              value={barcode}
+              onChange={(e) => setBarcode(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleLookup()}
+            />
+            {scannerError && (
+              <p className="text-xs text-destructive">Scanner error: {scannerError}</p>
+            )}
+          </div>
+          <Button variant="outline" onClick={startScanner}>
+            <Camera className="mr-2 size-4" />
+            Scan with camera
+          </Button>
+          <Button onClick={handleLookup} disabled={loading || !barcode.trim()}>
+            {loading ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Search className="mr-2 size-4" />
+            )}
+            Look Up
+          </Button>
+        </>
+      )}
     </div>
   );
 }
