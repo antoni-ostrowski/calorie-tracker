@@ -1,19 +1,29 @@
-FROM oven/bun:1 AS builder
+FROM node:22-slim AS builder
 
 WORKDIR /app
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile
+
+# Install build tooling for native dependencies (better-sqlite3)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY package.json ./
+RUN npm install
 
 COPY . .
 RUN mkdir -p data
-RUN bun run build
+RUN npm run build
 
-FROM oven/bun:1-slim
+FROM node:22-slim
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-0 \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/.output ./.output
@@ -27,4 +37,4 @@ ENV DATABASE_URL=./data/app.db
 
 EXPOSE 3000
 
-CMD ["bun", "run", ".output/server/index.mjs"]
+CMD ["node", ".output/server/index.mjs"]

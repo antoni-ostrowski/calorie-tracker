@@ -1,0 +1,7 @@
+node_modules
+.output
+data
+public/photos
+.git
+.env
+*.log
