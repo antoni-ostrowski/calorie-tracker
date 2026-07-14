@@ -2,7 +2,7 @@
 
 > (built with opencode with my guidance)
 
-Calorie tracking web app. PWA-ready, mobile-first. Intended for personal use via self-hosting. The main focus of the app is the AI estimation feature built to take advantage of my OpenCode Go subscription.
+Personal calorie tracking web app. PWA-ready, mobile-first. Intended for self-hosting. The main focus of the app is the AI estimation feature built to take advantage of OpenCode Go subscription.
 
 > currently hard coded to use "minimax-m3" model to balance out costs with quality
 
@@ -10,9 +10,13 @@ Calorie tracking web app. PWA-ready, mobile-first. Intended for personal use via
 
 My main goal with this app was to have the simplest possible way to track calories and not have any ads and features that I don't use.
 
-- very simple way to track daily calorie intake via AI photo estimation, barcode scan or manual search by name
-- history tab
-- settings tab to change default daily calorie intake
+- Adding entries:
+    - AI estimation - attach photo of meal, type in additional context and get estimated macros
+    - Barcode scanner - scan any product to quicky add it, type in exactly how many grams you ate
+    - Search - using [`FoodData Central API`](https://fdc.nal.usda.gov/api-guide) to add any food by name
+- History tab
+- Settings tab to change default daily calorie intake
+- No login or any bloat
 
 ## Tech
 
@@ -26,7 +30,7 @@ My main goal with this app was to have the simplest possible way to track calori
 
 ## AI estimation
 
-The fastest way to log food is to take a photo. The app sends the image to the OpenCode API (using the `minimax-m3` model), asks it to guess what the food is and estimate macros, then fills in calories, protein, carbs, fat and a weight for you. You can still edit the grams afterwards and the other numbers rescale automatically. Before you submit photo you can type in details to help model estimate better.
+The fastest way to log food is to take a photo. The app sends the image to the OpenCode API (using the `minimax-m3` model), asks it to guess what the food is and estimate macros, then fills in calories, protein, carbs, fat and a weight for you. You can still edit the grams afterwards and the other numbers rescale automatically. Before you submit photo you can type in details to help model estimate better. (you can also describe food in context without attaching photo)
 
 It's not going to be perfectly accurate, especially for home-cooked or mixed meals, but it's good enough for me and removes almost all friction from logging.
 
@@ -38,37 +42,49 @@ bun run db:migrate
 bun run dev
 ```
 
-## Docker
-
-```bash
-docker compose up --build
-```
-
 ## Self-hosting
 
 If you want to run this on your own server, the easiest path is Docker Compose. The only thing you really need to set is your OpenCode API key; everything else has sensible defaults.
 
-### Environment variables
 
-Create a `.env` file (or pass them in your compose setup):
+## Example Docker Compose setup 
 
 ```bash
-# SQLite database location. Inside the container this is already set to ./data/app.db.
-DATABASE_URL=./data/app.db
+services:
+  web:
+    image: antost360/calorie-tracker:latest
+    ports:
+      - "80:3000"
+    volumes:
+      - ./data-new:/app/data
+    environment:
+      - OPENCODE_API_KEY=${OPENCODE_API_KEY}
+    restart: unless-stopped
 
-# Required for AI photo estimation. (OpenCode Go sub api key)
+```
+
+
+### Environment variables
+
+Create a `.env` file (or pass them in your docker compose setup):
+
+> Without `OPENCODE_API_KEY`, the app still works for barcode and manual search, but the photo estimation button will fail.
+
+```bash
+# Required for AI estimation. (OpenCode Go sub api key)
 OPENCODE_API_KEY=your_key_here
 
-# depens on the model, for minimax-m3 thats correct.
+# I dont recommend changing these, they dont really matter
+# SQLite database location. Inside the container this is already set to ./data/app.db.
+DATABASE_URL=./data/app.db
+# Depens on the model, for minimax-m3 thats correct.
 OPENCODE_API_URL=https://opencode.ai/zen/go/v1
 ```
 
-Without `OPENCODE_API_KEY`, the app still works for barcode and manual search, but the photo estimation button will fail.
 
 ### Directories
 
-- `data/` — this is where the SQLite database (`app.db`) lives. If you back up one folder, back up this one.
-- `public/data/photos/` — this is where new food photos are saved and served from.
+- `data/` — this is where the SQLite database (`app.db`) lives and photos in `/data/photos`. If you back up one folder, back up this one.
 
 ### Building without Docker
 

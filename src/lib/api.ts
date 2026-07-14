@@ -1,10 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { eq, desc } from "drizzle-orm";
 import { z } from "zod";
+import fs from "fs/promises";
+import path from "path";
 import { db } from "~/db";
 import { days, entries, settings } from "~/db/schema";
 import { env } from "~/env";
-import fs from "fs/promises";
 
 async function getOrCreateSettings() {
   let row = await db.query.settings.findFirst();
@@ -130,12 +131,12 @@ export const createEntry = createServerFn({ method: "POST" })
           .replace(/\s+/g, "-")
           .replace(/[^a-zA-Z0-9-_]/g, "");
         const fileName = `${Date.now()}-${baseName}.${ext}`;
-        const outDir = "public/data/photos";
+        const outDir = path.resolve("data/photos");
         await fs.mkdir(outDir, { recursive: true });
-        filePath = `/data/photos/${fileName}`;
+        filePath = path.join(outDir, fileName);
         const cleanBase64 = photoStr.replace(/^data:image\/\w+;base64,/, "");
         const imageBuffer = Buffer.from(cleanBase64, "base64");
-        await fs.writeFile(`${outDir}/${fileName}`, imageBuffer);
+        await fs.writeFile(filePath, imageBuffer);
       }
     } catch (e) {
       console.error("[createEntry] failed to save photo: ", e);

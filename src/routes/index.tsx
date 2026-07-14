@@ -183,8 +183,7 @@ function IndexPage() {
 function EntryCard({ entry, onDelete }: { entry: Entry; onDelete: () => void }) {
   const [expanded, setExpanded] = useState(false);
   const aiDetails = parseAiDetails(entry);
-  const photoSrc = entry.filePath?.replace(/^\.\/data\/photos\//, "/data/photos/");
-
+  const photoSrc = "api/img/" + entry.id;
   return (
     <div className="rounded-xl border bg-card ">
       <div

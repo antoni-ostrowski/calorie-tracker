@@ -14,10 +14,10 @@ COPY package.json ./
 RUN npm install
 
 COPY . .
-RUN mkdir -p data
+RUN mkdir -p data/photos
 RUN npm run build
 
-FROM node:22-slim
+FROM node:22-slim AS runner
 
 WORKDIR /app
 
@@ -35,6 +35,8 @@ COPY --from=builder /app/drizzle.config.ts ./
 ENV NODE_ENV=production
 ENV DATABASE_URL=./data/app.db
 
+RUN mkdir -p /app/data/photos
+
 EXPOSE 3000
 
-CMD ["node", ".output/server/index.mjs"]
+CMD ["sh", "-c", "npx drizzle-kit migrate && node .output/server/index.mjs"]
