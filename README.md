@@ -11,9 +11,9 @@ Personal calorie tracking web app. PWA-ready, mobile-first. Intended for self-ho
 My main goal with this app was to have the simplest possible way to track calories and not have any ads and features that I don't use.
 
 - Adding entries:
-    - AI estimation - attach photo of meal, type in additional context and get estimated macros
-    - Barcode scanner - scan any product to quicky add it, type in exactly how many grams you ate
-    - Search - using [`FoodData Central API`](https://fdc.nal.usda.gov/api-guide) to add any food by name
+  - AI estimation - attach photo of meal, type in additional context and get estimated macros
+  - Barcode scanner - scan any product to quicky add it, type in exactly how many grams you ate
+  - Search - using [`FoodData Central API`](https://fdc.nal.usda.gov/api-guide) to add any food by name
 - History tab
 - Settings tab to change default daily calorie intake
 - No login or any bloat
@@ -46,8 +46,7 @@ bun run dev
 
 If you want to run this on your own server, the easiest path is Docker Compose. The only thing you really need to set is your OpenCode API key; everything else has sensible defaults.
 
-
-## Example Docker Compose setup 
+## Example Docker Compose setup
 
 ```bash
 services:
@@ -62,7 +61,6 @@ services:
     restart: unless-stopped
 
 ```
-
 
 ### Environment variables
 
@@ -80,7 +78,6 @@ DATABASE_URL=./data/app.db
 # Depens on the model, for minimax-m3 thats correct.
 OPENCODE_API_URL=https://opencode.ai/zen/go/v1
 ```
-
 
 ### Directories
 

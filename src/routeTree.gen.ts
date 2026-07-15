@@ -8,97 +8,97 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root";
-import { Route as SettingsRouteImport } from "./routes/settings";
-import { Route as HistoryRouteImport } from "./routes/history";
-import { Route as IndexRouteImport } from "./routes/index";
-import { Route as ApiImgIdRouteImport } from "./routes/api/img/$id";
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as HistoryRouteImport } from './routes/history'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiImgIdRouteImport } from './routes/api/img/$id'
 
 const SettingsRoute = SettingsRouteImport.update({
-  id: "/settings",
-  path: "/settings",
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const HistoryRoute = HistoryRouteImport.update({
-  id: "/history",
-  path: "/history",
+  id: '/history',
+  path: '/history',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const IndexRoute = IndexRouteImport.update({
-  id: "/",
-  path: "/",
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const ApiImgIdRoute = ApiImgIdRouteImport.update({
-  id: "/api/img/$id",
-  path: "/api/img/$id",
+  id: '/api/img/$id',
+  path: '/api/img/$id',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute;
-  "/history": typeof HistoryRoute;
-  "/settings": typeof SettingsRoute;
-  "/api/img/$id": typeof ApiImgIdRoute;
+  '/': typeof IndexRoute
+  '/history': typeof HistoryRoute
+  '/settings': typeof SettingsRoute
+  '/api/img/$id': typeof ApiImgIdRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute;
-  "/history": typeof HistoryRoute;
-  "/settings": typeof SettingsRoute;
-  "/api/img/$id": typeof ApiImgIdRoute;
+  '/': typeof IndexRoute
+  '/history': typeof HistoryRoute
+  '/settings': typeof SettingsRoute
+  '/api/img/$id': typeof ApiImgIdRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  "/": typeof IndexRoute;
-  "/history": typeof HistoryRoute;
-  "/settings": typeof SettingsRoute;
-  "/api/img/$id": typeof ApiImgIdRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/history': typeof HistoryRoute
+  '/settings': typeof SettingsRoute
+  '/api/img/$id': typeof ApiImgIdRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/" | "/history" | "/settings" | "/api/img/$id";
-  fileRoutesByTo: FileRoutesByTo;
-  to: "/" | "/history" | "/settings" | "/api/img/$id";
-  id: "__root__" | "/" | "/history" | "/settings" | "/api/img/$id";
-  fileRoutesById: FileRoutesById;
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths: '/' | '/history' | '/settings' | '/api/img/$id'
+  fileRoutesByTo: FileRoutesByTo
+  to: '/' | '/history' | '/settings' | '/api/img/$id'
+  id: '__root__' | '/' | '/history' | '/settings' | '/api/img/$id'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
-  HistoryRoute: typeof HistoryRoute;
-  SettingsRoute: typeof SettingsRoute;
-  ApiImgIdRoute: typeof ApiImgIdRoute;
+  IndexRoute: typeof IndexRoute
+  HistoryRoute: typeof HistoryRoute
+  SettingsRoute: typeof SettingsRoute
+  ApiImgIdRoute: typeof ApiImgIdRoute
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/settings": {
-      id: "/settings";
-      path: "/settings";
-      fullPath: "/settings";
-      preLoaderRoute: typeof SettingsRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/history": {
-      id: "/history";
-      path: "/history";
-      fullPath: "/history";
-      preLoaderRoute: typeof HistoryRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/": {
-      id: "/";
-      path: "/";
-      fullPath: "/";
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/api/img/$id": {
-      id: "/api/img/$id";
-      path: "/api/img/$id";
-      fullPath: "/api/img/$id";
-      preLoaderRoute: typeof ApiImgIdRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/history': {
+      id: '/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof HistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/img/$id': {
+      id: '/api/img/$id'
+      path: '/api/img/$id'
+      fullPath: '/api/img/$id'
+      preLoaderRoute: typeof ApiImgIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -107,16 +107,16 @@ const rootRouteChildren: RootRouteChildren = {
   HistoryRoute: HistoryRoute,
   SettingsRoute: SettingsRoute,
   ApiImgIdRoute: ApiImgIdRoute,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()
 
-import type { getRouter } from "./router.tsx";
-import type { createStart } from "@tanstack/react-start";
-declare module "@tanstack/react-start" {
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
   interface Register {
-    ssr: true;
-    router: Awaited<ReturnType<typeof getRouter>>;
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
   }
 }

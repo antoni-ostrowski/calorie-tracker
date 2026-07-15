@@ -88,12 +88,15 @@ function IndexPage() {
   return (
     <div
       className={cn(
-        "mx-auto flex min-h-screen max-w-md flex-col",
+        "mx-auto flex h-[calc(100dvh-0.5rem)] max-h-[calc(100dvh-0.5rem)] max-w-md flex-col overflow-hidden",
         isToday ? "bg-background" : "bg-muted/50",
       )}
     >
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header
+        className="sticky top-0 z-10 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+        style={{ paddingTop: "max(env(safe-area-inset-top), 2.5rem)" }}
+      >
         <div className="flex items-center justify-between px-4 py-3">
           <button
             onClick={goToPrevDay}
@@ -153,7 +156,7 @@ function IndexPage() {
       </div>
 
       {/* Entries List */}
-      <div className="flex-1 px-4 py-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4">
         {isLoading ? (
           <div className="flex justify-center py-8">
             <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />

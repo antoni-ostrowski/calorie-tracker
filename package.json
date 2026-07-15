@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "docker:build": "docker build -t antost360/calorie-tracker --platform=linux/amd64 .",
+    "docker:deploy": "docker push antost360/calorie-tracker"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.2.2",
