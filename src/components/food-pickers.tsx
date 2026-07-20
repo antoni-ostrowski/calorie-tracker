@@ -4,7 +4,7 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { toast } from "sonner";
-import { Html5QrcodeScanner } from "html5-qrcode";
+import { Html5Qrcode } from "html5-qrcode";
 import { lookupBarcode, searchFood } from "~/lib/api";
 
 export interface FoodInfo {
@@ -103,12 +103,11 @@ export function BarcodeLookup({ onSelect }: { onSelect: (food: FoodInfo) => void
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
-  const scannerId = useRef(`barcode-scanner-${Math.random().toString(36).slice(2)}`).current;
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const [scannerId, setScannerId] = useState<string | null>(null);
   const lookupStartedRef = useRef(false);
 
   useEffect(() => {
-    if (!scanning) {
+    if (!scanning || !scannerId) {
       setScannerError(null);
       return;
     }
@@ -120,25 +119,70 @@ export function BarcodeLookup({ onSelect }: { onSelect: (food: FoodInfo) => void
       return;
     }
 
-    const scanner = new Html5QrcodeScanner(scannerId, { fps: 10, qrbox: 250 }, false);
-    scannerRef.current = scanner;
+    let active = true;
+    let scanner: Html5Qrcode | null = null;
+    let started = false;
 
-    scanner.render(
-      (decodedText) => {
-        if (lookupStartedRef.current) return;
-        lookupStartedRef.current = true;
-        setBarcode(decodedText);
+    const stopAndClear = async () => {
+      if (!scanner) return;
+      if (scanner.isScanning) {
+        try {
+          await scanner.stop();
+        } catch (e: any) {
+          console.error("[barcode] stop error", e);
+        }
+      }
+      try {
+        scanner.clear();
+      } catch (e: any) {
+        console.error("[barcode] clear error", e);
+      }
+    };
+
+    (async () => {
+      try {
+        const cameras = await Html5Qrcode.getCameras();
+        if (!active) return;
+
+        if (!cameras || cameras.length === 0) {
+          setScannerError("No camera found");
+          setScanning(false);
+          return;
+        }
+
+        const preferred = cameras.find((camera) => /back|rear|environment/i.test(camera.label));
+        const cameraId = preferred?.id ?? cameras[0].id;
+
+        scanner = new Html5Qrcode(scannerId);
+        await scanner.start(
+          cameraId,
+          { fps: 10, qrbox: 250 },
+          (decodedText: string) => {
+            if (lookupStartedRef.current) return;
+            lookupStartedRef.current = true;
+            setBarcode(decodedText);
+            setScanning(false);
+            lookupProduct(decodedText);
+          },
+          () => {
+            // frame-level errors ignored
+          },
+        );
+
+        started = true;
+        if (!active) await stopAndClear();
+      } catch (err: any) {
+        if (!active) return;
+        setScannerError(err?.message || String(err));
         setScanning(false);
-        lookupProduct(decodedText);
-      },
-      () => {
-        // frame-level errors ignored
-      },
-    );
+      }
+    })();
 
     return () => {
-      scannerRef.current = null;
-      scanner.clear().catch((e) => console.error("[barcode] cleanup error", e));
+      active = false;
+      if (started) {
+        stopAndClear();
+      }
     };
   }, [scanning, scannerId]);
 
@@ -162,12 +206,13 @@ export function BarcodeLookup({ onSelect }: { onSelect: (food: FoodInfo) => void
   const startScanner = () => {
     lookupStartedRef.current = false;
     setScannerError(null);
+    setScannerId(`barcode-scanner-${Math.random().toString(36).slice(2)}`);
     setScanning(true);
   };
 
   const stopScanner = () => setScanning(false);
 
-  if (scanning) {
+  if (scanning && scannerId) {
     return (
       <div className="flex flex-col gap-2">
         <div
