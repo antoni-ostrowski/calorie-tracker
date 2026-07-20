@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiMealImgIdRouteImport } from './routes/api/meal-img/$id'
 import { Route as ApiImgIdRouteImport } from './routes/api/img/$id'
 
 const SettingsRoute = SettingsRouteImport.update({
@@ -29,6 +30,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMealImgIdRoute = ApiMealImgIdRouteImport.update({
+  id: '/api/meal-img/$id',
+  path: '/api/meal-img/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiImgIdRoute = ApiImgIdRouteImport.update({
   id: '/api/img/$id',
   path: '/api/img/$id',
@@ -40,12 +46,14 @@ export interface FileRoutesByFullPath {
   '/history': typeof HistoryRoute
   '/settings': typeof SettingsRoute
   '/api/img/$id': typeof ApiImgIdRoute
+  '/api/meal-img/$id': typeof ApiMealImgIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/history': typeof HistoryRoute
   '/settings': typeof SettingsRoute
   '/api/img/$id': typeof ApiImgIdRoute
+  '/api/meal-img/$id': typeof ApiMealImgIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -53,13 +61,25 @@ export interface FileRoutesById {
   '/history': typeof HistoryRoute
   '/settings': typeof SettingsRoute
   '/api/img/$id': typeof ApiImgIdRoute
+  '/api/meal-img/$id': typeof ApiMealImgIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/history' | '/settings' | '/api/img/$id'
+  fullPaths:
+    | '/'
+    | '/history'
+    | '/settings'
+    | '/api/img/$id'
+    | '/api/meal-img/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/history' | '/settings' | '/api/img/$id'
-  id: '__root__' | '/' | '/history' | '/settings' | '/api/img/$id'
+  to: '/' | '/history' | '/settings' | '/api/img/$id' | '/api/meal-img/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/history'
+    | '/settings'
+    | '/api/img/$id'
+    | '/api/meal-img/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -67,6 +87,7 @@ export interface RootRouteChildren {
   HistoryRoute: typeof HistoryRoute
   SettingsRoute: typeof SettingsRoute
   ApiImgIdRoute: typeof ApiImgIdRoute
+  ApiMealImgIdRoute: typeof ApiMealImgIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -92,6 +113,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/meal-img/$id': {
+      id: '/api/meal-img/$id'
+      path: '/api/meal-img/$id'
+      fullPath: '/api/meal-img/$id'
+      preLoaderRoute: typeof ApiMealImgIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/img/$id': {
       id: '/api/img/$id'
       path: '/api/img/$id'
@@ -107,6 +135,7 @@ const rootRouteChildren: RootRouteChildren = {
   HistoryRoute: HistoryRoute,
   SettingsRoute: SettingsRoute,
   ApiImgIdRoute: ApiImgIdRoute,
+  ApiMealImgIdRoute: ApiMealImgIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

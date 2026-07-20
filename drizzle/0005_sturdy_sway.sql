@@ -1,0 +1,1 @@
+ALTER TABLE `meals` ADD `file_path` text;

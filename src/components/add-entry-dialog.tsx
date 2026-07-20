@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useQueryClient, useMutation } from "@tanstack/react-query";
-import { Plus, Camera, ScanBarcode, Search, Check, X, Loader2, Sparkles } from "lucide-react";
+import { useState } from "react";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
+import { Plus, Sparkles, ScanBarcode, Search, Utensils, Check, X } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -14,11 +14,27 @@ import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { toast } from "sonner";
-import { Html5QrcodeScanner } from "html5-qrcode";
-import { createEntry, lookupBarcode, searchFood, estimateWithAI } from "~/lib/api";
+import { createEntry, createMealEntry, estimateWithAI, getMeals } from "~/lib/api";
+import {
+  BarcodeLookup,
+  FoodAmountForm,
+  SearchLookup,
+  type FoodInfo,
+} from "~/components/food-pickers";
+import type { MealWithIngredients } from "~/db/schema";
 
 interface AddEntryDialogProps {
   date: string;
+}
+
+export interface MealIngredientSnapshot {
+  name: string;
+  grams: number;
+  calories: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+  source: "barcode" | "search";
 }
 
 export interface EntryData {
@@ -29,8 +45,9 @@ export interface EntryData {
   carbs?: number;
   fat?: number;
   grams: number;
-  source: "barcode" | "search" | "ai";
+  source: "barcode" | "search" | "ai" | "meal";
   aiDetails?: Record<string, any>;
+  mealDetails?: { ingredients: MealIngredientSnapshot[] };
   photoStr?: string | null;
 }
 
@@ -68,7 +85,7 @@ export function AddEntryDialog({ date }: AddEntryDialogProps) {
           <DialogTitle>Add Food</DialogTitle>
         </DialogHeader>
         <Tabs defaultValue="ai" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="ai">
               <Sparkles className="mr-1 size-4" />
               AI
@@ -80,6 +97,10 @@ export function AddEntryDialog({ date }: AddEntryDialogProps) {
             <TabsTrigger value="search">
               <Search className="mr-1 size-4" />
               Search
+            </TabsTrigger>
+            <TabsTrigger value="meals">
+              <Utensils className="mr-1 size-4" />
+              Meals
             </TabsTrigger>
           </TabsList>
 
@@ -93,6 +114,10 @@ export function AddEntryDialog({ date }: AddEntryDialogProps) {
 
           <TabsContent value="search">
             <SearchTab date={date} onAdd={handleAdd} onClose={() => setOpen(false)} />
+          </TabsContent>
+
+          <TabsContent value="meals">
+            <MealsTab date={date} onAdd={handleAdd} onClose={() => setOpen(false)} />
           </TabsContent>
         </Tabs>
       </DialogContent>
@@ -221,7 +246,21 @@ function AIPhotoTab({ date, onAdd, onClose }: TabProps) {
           </div>
         ) : (
           <label className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-muted-foreground/25 p-6 hover:bg-muted/50">
-            <Camera className="size-8 text-muted-foreground" />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="size-8 text-muted-foreground"
+            >
+              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+              <circle cx="12" cy="13" r="3" />
+            </svg>
             <span className="text-sm text-muted-foreground">Take a photo</span>
             <input type="file" accept="image/*" className="hidden" onChange={handlePhotoCapture} />
           </label>
@@ -241,7 +280,20 @@ function AIPhotoTab({ date, onAdd, onClose }: TabProps) {
 
       <Button onClick={handleEstimate} disabled={loading}>
         {loading ? (
-          <Loader2 className="mr-2 size-4 animate-spin" />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="mr-2 size-4 animate-spin"
+          >
+            <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+          </svg>
         ) : (
           <Sparkles className="mr-2 size-4" />
         )}
@@ -252,291 +304,203 @@ function AIPhotoTab({ date, onAdd, onClose }: TabProps) {
 }
 
 function BarcodeTab({ date, onAdd, onClose }: TabProps) {
-  const [barcode, setBarcode] = useState("");
-  const [product, setProduct] = useState<any>(null);
-  const [grams, setGrams] = useState(100);
-  const [loading, setLoading] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [scannerError, setScannerError] = useState<string | null>(null);
-  const scannerId = useRef(`barcode-scanner-${Math.random().toString(36).slice(2)}`).current;
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
-  const lookupStartedRef = useRef(false);
+  const [selected, setSelected] = useState<FoodInfo | null>(null);
 
-  useEffect(() => {
-    if (!scanning) {
-      setScannerError(null);
-      return;
-    }
-
-    const element = document.getElementById(scannerId);
-    console.log("[barcode] start effect", { scannerId, elementFound: !!element });
-    if (!element) {
-      setScannerError(`Scanner element ${scannerId} not found`);
-      setScanning(false);
-      return;
-    }
-
-    const scanner = new Html5QrcodeScanner(scannerId, { fps: 10, qrbox: 250 }, false);
-    scannerRef.current = scanner;
-
-    scanner.render(
-      (decodedText) => {
-        if (lookupStartedRef.current) return;
-        lookupStartedRef.current = true;
-        console.log("[barcode] decoded", decodedText);
-        setBarcode(decodedText);
-        setScanning(false);
-        lookupProduct(decodedText);
-      },
-      () => {
-        // frame-level no-code errors are expected; ignored
-      },
-    );
-
-    return () => {
-      scannerRef.current = null;
-      scanner.clear().catch((e) => console.error("[barcode] cleanup error", e));
-    };
-  }, [scanning, scannerId]);
-
-  const lookupProduct = useCallback(async (code: string) => {
-    if (!code.trim()) return;
-    setLoading(true);
-    try {
-      const res = await lookupBarcode({ data: { barcode: code.trim() } });
-      setProduct(res);
-      setGrams(100);
-    } catch (err: any) {
-      toast.error(err.message || "Product not found");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const startScanner = () => {
-    console.log("[barcode] user requested scanner");
-    lookupStartedRef.current = false;
-    setScannerError(null);
-    setScanning(true);
-  };
-
-  const stopScanner = () => {
-    console.log("[barcode] user cancelled scanner");
-    setScanning(false);
-  };
-
-  const handleLookup = () => lookupProduct(barcode);
-
-  const handleAdd = () => {
-    if (!product) return;
-    const ratio = grams / 100;
-    onAdd({
-      date,
-      name: product.name,
-      calories: Math.round(product.caloriesPer100g * ratio),
-      protein: Math.round(product.proteinPer100g * ratio * 10) / 10,
-      carbs: Math.round(product.carbsPer100g * ratio * 10) / 10,
-      fat: Math.round(product.fatPer100g * ratio * 10) / 10,
-      grams,
-      source: "barcode",
-    });
-    onClose();
-  };
-
-  if (product) {
+  if (selected) {
     return (
-      <div className="flex flex-col gap-4">
-        <div className="rounded-lg bg-muted p-4">
-          <h3 className="font-semibold">{product.name}</h3>
-          <p className="text-sm text-muted-foreground">
-            {Math.round(product.caloriesPer100g)} kcal / 100g
-          </p>
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="barcode-grams">Amount (grams)</Label>
-          <Input
-            id="barcode-grams"
-            type="number"
-            value={grams}
-            onChange={(e) => setGrams(Number(e.target.value))}
-            min={1}
-          />
-        </div>
-        <p className="text-center text-sm text-muted-foreground">
-          = {Math.round(product.caloriesPer100g * (grams / 100))} kcal
-        </p>
-        <div className="flex gap-2">
-          <Button variant="outline" className="flex-1" onClick={() => setProduct(null)}>
-            Back
-          </Button>
-          <Button className="flex-1" onClick={handleAdd}>
-            <Check className="mr-1 size-4" />
-            Add
-          </Button>
-        </div>
+      <FoodAmountForm
+        food={selected}
+        source="barcode"
+        onConfirm={(ingredient) => {
+          onAdd({
+            date,
+            name: ingredient.name,
+            calories: ingredient.calories,
+            protein: ingredient.protein,
+            carbs: ingredient.carbs,
+            fat: ingredient.fat,
+            grams: ingredient.grams,
+            source: "barcode",
+          });
+          onClose();
+        }}
+        onCancel={() => setSelected(null)}
+      />
+    );
+  }
+
+  return <BarcodeLookup onSelect={setSelected} />;
+}
+
+function SearchTab({ date, onAdd, onClose }: TabProps) {
+  const [selected, setSelected] = useState<FoodInfo | null>(null);
+
+  if (selected) {
+    return (
+      <FoodAmountForm
+        food={selected}
+        source="search"
+        onConfirm={(ingredient) => {
+          onAdd({
+            date,
+            name: ingredient.name,
+            calories: ingredient.calories,
+            protein: ingredient.protein,
+            carbs: ingredient.carbs,
+            fat: ingredient.fat,
+            grams: ingredient.grams,
+            source: "search",
+          });
+          onClose();
+        }}
+        onCancel={() => setSelected(null)}
+      />
+    );
+  }
+
+  return <SearchLookup onSelect={setSelected} />;
+}
+
+function MealsTab({ date, onClose }: TabProps) {
+  const queryClient = useQueryClient();
+  const { data: meals, isLoading } = useQuery({
+    queryKey: ["meals"],
+    queryFn: () => getMeals(),
+  });
+  const [selected, setSelected] = useState<MealWithIngredients | null>(null);
+
+  const logMealMutation = useMutation({
+    mutationFn: createMealEntry,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["day", date] });
+      queryClient.invalidateQueries({ queryKey: ["history"] });
+      toast.success("Entry added");
+      onClose();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  if (selected) {
+    return (
+      <MealAmountForm
+        meal={selected}
+        isPending={logMealMutation.isPending}
+        onConfirm={(grams) => logMealMutation.mutate({ data: { id: selected.id, date, grams } })}
+        onCancel={() => setSelected(null)}
+      />
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-8">
+        <div className="size-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!meals?.length) {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
+        <Utensils className="mb-2 size-10 opacity-50" />
+        <p className="text-sm">No saved meals</p>
+        <p className="text-xs">Create meals in Settings</p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {scanning ? (
-        <div className="flex flex-col gap-2">
-          <div
-            id={scannerId}
-            className="relative w-full min-h-[300px] rounded-lg overflow-hidden bg-black"
-          />
-          <Button variant="outline" onClick={stopScanner}>
-            Cancel scanning
-          </Button>
-        </div>
-      ) : (
-        <>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="barcode-input">Barcode</Label>
-            <Input
-              id="barcode-input"
-              placeholder="Type barcode"
-              value={barcode}
-              onChange={(e) => setBarcode(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleLookup()}
-            />
-            {scannerError && (
-              <p className="text-xs text-destructive">Scanner error: {scannerError}</p>
-            )}
-          </div>
-          <Button variant="outline" onClick={startScanner}>
-            <Camera className="mr-2 size-4" />
-            Scan with camera
-          </Button>
-          <Button onClick={handleLookup} disabled={loading || !barcode.trim()}>
-            {loading ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
+    <div className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto">
+      {meals.map((meal) => (
+        <button
+          key={meal.id}
+          onClick={() => setSelected(meal)}
+          className="rounded-xl border bg-card p-4 text-left hover:bg-muted"
+        >
+          <div className="flex items-center gap-3">
+            {meal.filePath ? (
+              <img
+                src={`api/meal-img/${meal.id}`}
+                alt={meal.name}
+                className="size-12 shrink-0 rounded-md border bg-muted object-cover"
+              />
             ) : (
-              <Search className="mr-2 size-4" />
+              <div className="flex size-12 shrink-0 items-center justify-center rounded-md border bg-muted">
+                <Utensils className="size-5 text-muted-foreground" />
+              </div>
             )}
-            Look Up
-          </Button>
-        </>
-      )}
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <span className="font-medium">{meal.name}</span>
+                <span className="text-sm font-semibold text-primary">
+                  {Math.round(meal.calories)} kcal
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {Math.round(meal.grams)}g · P {Math.round(meal.protein || 0)}g · C{" "}
+                {Math.round(meal.carbs || 0)}g · F {Math.round(meal.fat || 0)}g
+              </p>
+            </div>
+          </div>
+        </button>
+      ))}
     </div>
   );
 }
 
-function SearchTab({ date, onAdd, onClose }: TabProps) {
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<any[]>([]);
-  const [selected, setSelected] = useState<any>(null);
-  const [grams, setGrams] = useState(100);
-  const [loading, setLoading] = useState(false);
-
-  const handleSearch = async () => {
-    if (!query.trim()) return;
-    setLoading(true);
-    try {
-      const res = await searchFood({ data: { query: query.trim() } });
-      setResults(res);
-      setSelected(null);
-    } catch (err: any) {
-      toast.error(err.message || "Search failed");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAdd = () => {
-    if (!selected) return;
-    const ratio = grams / 100;
-    onAdd({
-      date,
-      name: selected.name,
-      calories: Math.round(selected.caloriesPer100g * ratio),
-      protein: Math.round(selected.proteinPer100g * ratio * 10) / 10,
-      carbs: Math.round(selected.carbsPer100g * ratio * 10) / 10,
-      fat: Math.round(selected.fatPer100g * ratio * 10) / 10,
-      grams,
-      source: "search",
-    });
-    onClose();
-  };
-
-  if (selected) {
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="rounded-lg bg-muted p-4">
-          <h3 className="font-semibold">{selected.name}</h3>
-          <p className="text-sm text-muted-foreground">
-            {Math.round(selected.caloriesPer100g)} kcal / 100g
-          </p>
-        </div>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="search-grams">Amount (grams)</Label>
-          <Input
-            id="search-grams"
-            type="number"
-            value={grams}
-            onChange={(e) => setGrams(Number(e.target.value))}
-            min={1}
-          />
-        </div>
-        <p className="text-center text-sm text-muted-foreground">
-          = {Math.round(selected.caloriesPer100g * (grams / 100))} kcal
-        </p>
-        <div className="flex gap-2">
-          <Button variant="outline" className="flex-1" onClick={() => setSelected(null)}>
-            Back
-          </Button>
-          <Button className="flex-1" onClick={handleAdd}>
-            <Check className="mr-1 size-4" />
-            Add
-          </Button>
-        </div>
-      </div>
-    );
-  }
+function MealAmountForm({
+  meal,
+  isPending,
+  onConfirm,
+  onCancel,
+}: {
+  meal: MealWithIngredients;
+  isPending: boolean;
+  onConfirm: (grams: number) => void;
+  onCancel: () => void;
+}) {
+  const [grams, setGrams] = useState(meal.grams);
+  const ratio = meal.grams > 0 ? grams / meal.grams : 0;
+  const calories = Math.round(meal.calories * ratio);
+  const protein = Math.round((meal.protein || 0) * ratio * 10) / 10;
+  const carbs = Math.round((meal.carbs || 0) * ratio * 10) / 10;
+  const fat = Math.round((meal.fat || 0) * ratio * 10) / 10;
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="search-input">Food name</Label>
-        <div className="flex gap-2">
-          <Input
-            id="search-input"
-            placeholder="e.g. chicken breast, rice..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          />
-        </div>
+      <div className="rounded-lg bg-muted p-4">
+        <h3 className="font-semibold">{meal.name}</h3>
+        <p className="text-sm text-muted-foreground">
+          {Math.round(meal.calories)} kcal / {Math.round(meal.grams)}g
+        </p>
       </div>
-      <Button onClick={handleSearch} disabled={loading || !query.trim()}>
-        {loading ? (
-          <Loader2 className="mr-2 size-4 animate-spin" />
-        ) : (
-          <Search className="mr-2 size-4" />
-        )}
-        Search
-      </Button>
-
-      {results.length > 0 && (
-        <div className="flex max-h-60 flex-col gap-1 overflow-y-auto">
-          {results.map((food, i) => (
-            <button
-              key={i}
-              onClick={() => {
-                setSelected(food);
-                setGrams(100);
-              }}
-              className="flex items-center justify-between rounded-lg border p-3 text-left hover:bg-muted"
-            >
-              <span className="text-sm font-medium">{food.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {Math.round(food.caloriesPer100g)} kcal/100g
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="meal-grams">Amount (grams)</Label>
+        <Input
+          id="meal-grams"
+          type="number"
+          value={grams}
+          onChange={(e) => setGrams(Number(e.target.value))}
+          min={1}
+        />
+      </div>
+      <p className="text-center text-sm text-muted-foreground">
+        = {calories} kcal · P {protein}g · C {carbs}g · F {fat}g
+      </p>
+      <div className="flex gap-2">
+        <Button variant="outline" className="flex-1" onClick={onCancel}>
+          <X className="mr-1 size-4" />
+          Back
+        </Button>
+        <Button className="flex-1" onClick={() => onConfirm(grams)} disabled={isPending}>
+          {isPending ? (
+            <span className="size-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+          ) : (
+            <Check className="mr-1 size-4" />
+          )}
+          Add
+        </Button>
+      </div>
     </div>
   );
 }

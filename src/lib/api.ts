@@ -4,8 +4,9 @@ import { z } from "zod";
 import fs from "fs/promises";
 import path from "path";
 import { db } from "~/db";
-import { days, entries, settings } from "~/db/schema";
+import { days, entries, mealIngredients, meals, settings } from "~/db/schema";
 import { env } from "~/env";
+import type { MealWithIngredients } from "~/db/schema";
 
 async function getOrCreateSettings() {
   let row = await db.query.settings.findFirst();
@@ -84,6 +85,16 @@ export const updateDayGoal = createServerFn({ method: "POST" })
     return { success: true };
   });
 
+const ingredientSchema = z.object({
+  name: z.string().min(1),
+  calories: z.number().min(0),
+  protein: z.number().optional(),
+  carbs: z.number().optional(),
+  fat: z.number().optional(),
+  grams: z.number().min(0),
+  source: z.enum(["barcode", "search"]),
+});
+
 export const createEntry = createServerFn({ method: "POST" })
   .inputValidator(
     z.object({
@@ -94,8 +105,13 @@ export const createEntry = createServerFn({ method: "POST" })
       carbs: z.number().optional(),
       fat: z.number().optional(),
       grams: z.number().min(0).default(100),
-      source: z.enum(["barcode", "search", "ai"]),
+      source: z.enum(["barcode", "search", "ai", "meal"]),
       aiDetails: z.record(z.any()).optional(),
+      mealDetails: z
+        .object({
+          ingredients: z.array(ingredientSchema),
+        })
+        .optional(),
       photoStr: z.string().optional().nullable(),
     }),
   )
@@ -120,23 +136,10 @@ export const createEntry = createServerFn({ method: "POST" })
       day = newDay;
     }
 
-    const { photoStr } = data;
     let filePath = "";
     try {
-      if (photoStr) {
-        const mimeMatch = photoStr.match(/^data:image\/(\w+);base64,/);
-        const ext = mimeMatch?.[1] ?? "jpg";
-        const baseName = data.name
-          .trim()
-          .replace(/\s+/g, "-")
-          .replace(/[^a-zA-Z0-9-_]/g, "");
-        const fileName = `${Date.now()}-${baseName}.${ext}`;
-        const outDir = path.resolve("data/photos");
-        await fs.mkdir(outDir, { recursive: true });
-        filePath = path.join(outDir, fileName);
-        const cleanBase64 = photoStr.replace(/^data:image\/\w+;base64,/, "");
-        const imageBuffer = Buffer.from(cleanBase64, "base64");
-        await fs.writeFile(filePath, imageBuffer);
+      if (data.photoStr) {
+        filePath = await savePhoto(data.photoStr, data.name);
       }
     } catch (e) {
       console.error("[createEntry] failed to save photo: ", e);
@@ -154,6 +157,7 @@ export const createEntry = createServerFn({ method: "POST" })
         grams: data.grams,
         source: data.source,
         aiDetails: data.aiDetails ? JSON.stringify(data.aiDetails) : undefined,
+        mealDetails: data.mealDetails ? JSON.stringify(data.mealDetails) : undefined,
         filePath,
       })
       .returning();
@@ -170,6 +174,316 @@ export const deleteEntry = createServerFn({ method: "POST" })
     await db.delete(entries).where(eq(entries.id, data.id));
     return { success: true };
   });
+
+export const duplicateEntry = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ id: z.number() }))
+  .handler(async ({ data }) => {
+    console.log("[duplicateEntry] called", { id: data.id });
+    const entry = await db.query.entries.findFirst({
+      where: eq(entries.id, data.id),
+    });
+
+    if (!entry) {
+      throw new Error("Entry not found");
+    }
+
+    let filePath = "";
+    if (entry.filePath) {
+      try {
+        const buffer = await fs.readFile(entry.filePath);
+        const ext = path.extname(entry.filePath) || ".jpg";
+        const baseName = entry.name
+          .trim()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-zA-Z0-9-_]/g, "");
+        const fileName = `${Date.now()}-${baseName}-copy${ext}`;
+        const outDir = path.resolve("data/photos");
+        await fs.mkdir(outDir, { recursive: true });
+        filePath = path.join(outDir, fileName);
+        await fs.writeFile(filePath, buffer);
+      } catch (e) {
+        console.error("[duplicateEntry] failed to copy entry photo: ", e);
+      }
+    }
+
+    const [newEntry] = await db
+      .insert(entries)
+      .values({
+        dayId: entry.dayId,
+        name: entry.name,
+        calories: entry.calories,
+        protein: entry.protein,
+        carbs: entry.carbs,
+        fat: entry.fat,
+        grams: entry.grams,
+        source: entry.source,
+        aiDetails: entry.aiDetails,
+        mealDetails: entry.mealDetails,
+        filePath,
+      })
+      .returning();
+
+    console.log("[duplicateEntry] created entry", { entryId: newEntry.id, dayId: entry.dayId });
+    return newEntry;
+  });
+
+interface IngredientInput {
+  name: string;
+  calories: number;
+  protein?: number | null;
+  carbs?: number | null;
+  fat?: number | null;
+  grams: number;
+  source: "barcode" | "search";
+}
+
+function totalsFromIngredients(ingredients: IngredientInput[]) {
+  return ingredients.reduce(
+    (acc, i) => ({
+      calories: acc.calories + (i.calories || 0),
+      protein: acc.protein + (i.protein || 0),
+      carbs: acc.carbs + (i.carbs || 0),
+      fat: acc.fat + (i.fat || 0),
+      grams: acc.grams + (i.grams || 0),
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0, grams: 0 },
+  );
+}
+
+export const getMeals = createServerFn({ method: "GET" }).handler(async () => {
+  console.log("[getMeals] called");
+  const rows = await db.query.meals.findMany({
+    with: {
+      ingredients: {
+        orderBy: (mealIngredients, { asc }) => [asc(mealIngredients.id)],
+      },
+    },
+    orderBy: (meals, { desc }) => [desc(meals.createdAt)],
+  });
+  console.log("[getMeals] found meals", { count: rows.length });
+  return rows as MealWithIngredients[];
+});
+
+export const createMeal = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      name: z.string().min(1),
+      ingredients: z.array(ingredientSchema).min(1),
+      photoStr: z.string().optional().nullable(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    console.log("[createMeal] called", { name: data.name, ingredients: data.ingredients.length });
+    const totals = totalsFromIngredients(data.ingredients);
+
+    let filePath = "";
+    try {
+      if (data.photoStr) {
+        filePath = await savePhoto(data.photoStr, data.name);
+      }
+    } catch (e) {
+      console.error("[createMeal] failed to save photo: ", e);
+    }
+
+    const [meal] = await db
+      .insert(meals)
+      .values({
+        name: data.name,
+        calories: totals.calories,
+        protein: totals.protein,
+        carbs: totals.carbs,
+        fat: totals.fat,
+        grams: totals.grams,
+        filePath,
+      })
+      .returning();
+
+    await db.insert(mealIngredients).values(
+      data.ingredients.map((i) => ({
+        mealId: meal.id,
+        name: i.name,
+        calories: i.calories,
+        protein: i.protein,
+        carbs: i.carbs,
+        fat: i.fat,
+        grams: i.grams,
+        source: i.source,
+      })),
+    );
+
+    return meal;
+  });
+
+export const updateMeal = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      id: z.number(),
+      name: z.string().min(1),
+      ingredients: z.array(ingredientSchema).min(1),
+      photoStr: z.string().optional().nullable(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    console.log("[updateMeal] called", { id: data.id, name: data.name });
+    const totals = totalsFromIngredients(data.ingredients);
+
+    const existing = await db.query.meals.findFirst({
+      where: eq(meals.id, data.id),
+    });
+
+    let filePath = existing?.filePath ?? "";
+    if (data.photoStr === null) {
+      filePath = "";
+    } else if (data.photoStr) {
+      try {
+        filePath = await savePhoto(data.photoStr, data.name);
+      } catch (e) {
+        console.error("[updateMeal] failed to save photo: ", e);
+      }
+    }
+
+    await db
+      .update(meals)
+      .set({
+        name: data.name,
+        calories: totals.calories,
+        protein: totals.protein,
+        carbs: totals.carbs,
+        fat: totals.fat,
+        grams: totals.grams,
+        filePath,
+      })
+      .where(eq(meals.id, data.id));
+
+    await db.delete(mealIngredients).where(eq(mealIngredients.mealId, data.id));
+    await db.insert(mealIngredients).values(
+      data.ingredients.map((i) => ({
+        mealId: data.id,
+        name: i.name,
+        calories: i.calories,
+        protein: i.protein,
+        carbs: i.carbs,
+        fat: i.fat,
+        grams: i.grams,
+        source: i.source,
+      })),
+    );
+
+    return { success: true };
+  });
+
+export const deleteMeal = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ id: z.number() }))
+  .handler(async ({ data }) => {
+    console.log("[deleteMeal] called", { id: data.id });
+    await db.delete(meals).where(eq(meals.id, data.id));
+    return { success: true };
+  });
+
+export const createMealEntry = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      id: z.number(),
+      date: z.string(),
+      grams: z.number().min(1),
+    }),
+  )
+  .handler(async ({ data }) => {
+    console.log("[createMealEntry] called", { id: data.id, date: data.date, grams: data.grams });
+    const meal = await db.query.meals.findFirst({
+      where: eq(meals.id, data.id),
+      with: {
+        ingredients: true,
+      },
+    });
+
+    if (!meal) {
+      throw new Error("Meal not found");
+    }
+
+    let day = await db.query.days.findFirst({
+      where: eq(days.date, data.date),
+    });
+
+    if (!day) {
+      const { defaultCalorieGoal } = await getOrCreateSettings();
+      const [newDay] = await db
+        .insert(days)
+        .values({ date: data.date, calorieGoal: defaultCalorieGoal })
+        .returning();
+      day = newDay;
+    }
+
+    const ratio = meal.grams > 0 ? data.grams / meal.grams : 0;
+    const calories = Math.round(meal.calories * ratio);
+    const protein = Math.round((meal.protein || 0) * ratio * 10) / 10;
+    const carbs = Math.round((meal.carbs || 0) * ratio * 10) / 10;
+    const fat = Math.round((meal.fat || 0) * ratio * 10) / 10;
+
+    const snapshotIngredients = meal.ingredients.map((i) => ({
+      name: i.name,
+      grams: Math.round(i.grams * ratio * 10) / 10,
+      calories: Math.round(i.calories * ratio),
+      protein: Math.round((i.protein || 0) * ratio * 10) / 10,
+      carbs: Math.round((i.carbs || 0) * ratio * 10) / 10,
+      fat: Math.round((i.fat || 0) * ratio * 10) / 10,
+      source: i.source,
+    }));
+
+    let filePath = "";
+    if (meal.filePath) {
+      try {
+        const buffer = await fs.readFile(meal.filePath);
+        const ext = path.extname(meal.filePath) || ".jpg";
+        const baseName = meal.name
+          .trim()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-zA-Z0-9-_]/g, "");
+        const fileName = `${Date.now()}-${baseName}-meal${ext}`;
+        const outDir = path.resolve("data/photos");
+        await fs.mkdir(outDir, { recursive: true });
+        filePath = path.join(outDir, fileName);
+        await fs.writeFile(filePath, buffer);
+      } catch (e) {
+        console.error("[createMealEntry] failed to copy meal photo: ", e);
+      }
+    }
+
+    const [entry] = await db
+      .insert(entries)
+      .values({
+        dayId: day.id,
+        name: meal.name,
+        calories,
+        protein,
+        carbs,
+        fat,
+        grams: data.grams,
+        source: "meal",
+        mealDetails: JSON.stringify({ ingredients: snapshotIngredients }),
+        filePath,
+      })
+      .returning();
+
+    return entry;
+  });
+
+async function savePhoto(photoStr: string, name: string): Promise<string> {
+  const mimeMatch = photoStr.match(/^data:image\/(\w+);base64,/);
+  const ext = mimeMatch?.[1] ?? "jpg";
+  const baseName = name
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9-_]/g, "");
+  const fileName = `${Date.now()}-${baseName}.${ext}`;
+  const outDir = path.resolve("data/photos");
+  await fs.mkdir(outDir, { recursive: true });
+  const filePath = path.join(outDir, fileName);
+  const cleanBase64 = photoStr.replace(/^data:image\/\w+;base64,/, "");
+  const imageBuffer = Buffer.from(cleanBase64, "base64");
+  await fs.writeFile(filePath, imageBuffer);
+  return filePath;
+}
 
 const aiEstimateResponseSchema = z.object({
   name: z.string(),

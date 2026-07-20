@@ -11,6 +11,7 @@ import {
   Sparkles,
   Utensils,
   ChevronDown,
+  Copy,
 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Progress } from "~/components/ui/progress";
@@ -26,7 +27,7 @@ import {
   AlertDialogTrigger,
 } from "~/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { getDayByDate, deleteEntry } from "~/lib/api";
+import { getDayByDate, deleteEntry, duplicateEntry } from "~/lib/api";
 import { cn } from "~/lib/utils";
 import type { Entry } from "~/db/schema";
 
@@ -38,6 +39,7 @@ const SOURCE_LABELS: Record<Entry["source"], string> = {
   ai: "AI Estimation",
   barcode: "Barcode Scanned",
   search: "Manually Searched",
+  meal: "Saved Meal",
 };
 
 function IndexPage() {
@@ -65,6 +67,16 @@ function IndexPage() {
       queryClient.invalidateQueries({ queryKey: ["day", dateStr] });
       queryClient.invalidateQueries({ queryKey: ["history"] });
       toast.success("Entry removed");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const duplicateEntryMutation = useMutation({
+    mutationFn: duplicateEntry,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["day", dateStr] });
+      queryClient.invalidateQueries({ queryKey: ["history"] });
+      toast.success("Entry duplicated");
     },
     onError: (err) => toast.error(err.message),
   });
@@ -168,6 +180,7 @@ function IndexPage() {
                 key={entry.id}
                 entry={entry}
                 onDelete={() => removeEntryMutation.mutate({ data: { id: entry.id! } })}
+                onDuplicate={() => duplicateEntryMutation.mutate({ data: { id: entry.id! } })}
               />
             ))}
           </div>
@@ -183,10 +196,18 @@ function IndexPage() {
   );
 }
 
-function EntryCard({ entry, onDelete }: { entry: Entry; onDelete: () => void }) {
+function EntryCard({
+  entry,
+  onDelete,
+  onDuplicate,
+}: {
+  entry: Entry;
+  onDelete: () => void;
+  onDuplicate: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const aiDetails = parseAiDetails(entry);
-  const photoSrc = "api/img/" + entry.id;
+  const photoSrc = entry.filePath ? "api/img/" + entry.id : null;
   return (
     <div className="rounded-xl border bg-card ">
       <div
@@ -213,20 +234,46 @@ function EntryCard({ entry, onDelete }: { entry: Entry; onDelete: () => void }) 
             </div>
           </div>
 
-          <div className="flex justify-between gap-2 w-full flex-row">
-            <Badge variant="outline" className="text-xs">
-              {entry.source === "ai" && <Sparkles className=" size-3" />}
-              {entry.source === "barcode" && <ScanBarcode className=" size-3" />}
-              {entry.source === "search" && <Search className=" size-3" />}
-              {Math.round(entry.calories)}
+          <div className="flex items-center justify-between gap-3">
+            <Badge
+              variant="outline"
+              className="h-7 gap-1.5 border-border/60 bg-background/80 px-2.5 text-xs font-medium shadow-sm"
+            >
+              {entry.source === "ai" && <Sparkles className="size-3 text-amber-500" />}
+              {entry.source === "barcode" && <ScanBarcode className="size-3 text-blue-500" />}
+              {entry.source === "search" && <Search className="size-3 text-emerald-500" />}
+              {Math.round(entry.calories)} kcal
             </Badge>
 
-            <div className="flex items-center gap-1">
-              <ChevronDown
-                className={`size-4 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
-              />
+            <div className="flex items-center gap-2">
+              <div className="flex items-center overflow-hidden rounded-full border border-border/50 bg-muted/60 p-1 shadow-sm">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDuplicate();
+                  }}
+                  className="flex size-9 items-center justify-center rounded-full text-amber-600 transition-all duration-150 hover:bg-amber-500/10 hover:text-amber-700 active:scale-90"
+                  aria-label="Duplicate entry"
+                >
+                  <Copy className="size-4" />
+                </button>
+                <span className="mx-0.5 h-4 w-px bg-border/80" />
+                <DeleteButton onConfirm={onDelete} />
+              </div>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpanded((v) => !v);
+                }}
+                className="flex size-8 items-center justify-center rounded-full bg-muted/60 text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground active:scale-90"
+                aria-label={expanded ? "Collapse details" : "Expand details"}
+              >
+                <ChevronDown
+                  className={`size-4 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+                />
+              </button>
             </div>
-            <DeleteButton onConfirm={onDelete} />
           </div>
         </div>
       </div>
@@ -260,6 +307,10 @@ function EntryCard({ entry, onDelete }: { entry: Entry; onDelete: () => void }) 
               )}
             </div>
           )}
+
+          {entry.source === "meal" && entry.mealDetails && (
+            <MealDetails details={entry.mealDetails} />
+          )}
         </div>
       )}
     </div>
@@ -272,7 +323,8 @@ function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
       <AlertDialogTrigger asChild>
         <button
           onClick={(e) => e.stopPropagation()}
-          className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          className="flex size-9 items-center justify-center rounded-full text-rose-600 transition-all duration-150 hover:bg-rose-500/10 hover:text-rose-700 active:scale-90"
+          aria-label="Delete entry"
         >
           <Trash2 className="size-4" />
         </button>
@@ -308,6 +360,46 @@ function parseAiDetails(entry: Entry) {
   } catch {
     return null;
   }
+}
+
+function MealDetails({ details }: { details: string }) {
+  const parsed = (() => {
+    try {
+      return JSON.parse(details) as {
+        ingredients: {
+          name: string;
+          grams: number;
+          calories: number;
+          protein?: number;
+          carbs?: number;
+          fat?: number;
+          source: "barcode" | "search";
+        }[];
+      };
+    } catch {
+      return null;
+    }
+  })();
+
+  if (!parsed?.ingredients?.length) return null;
+
+  return (
+    <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+      <p className="font-medium text-foreground">Ingredients</p>
+      {parsed.ingredients.map((ing, i) => (
+        <p key={i}>
+          {ing.name} · {Math.round(ing.grams)}g · {Math.round(ing.calories)} kcal
+          {(ing.protein || ing.carbs || ing.fat) && (
+            <span>
+              {" "}
+              · P {Math.round(ing.protein || 0)}g · C {Math.round(ing.carbs || 0)}g · F{" "}
+              {Math.round(ing.fat || 0)}g
+            </span>
+          )}
+        </p>
+      ))}
+    </div>
+  );
 }
 
 export const Route = createFileRoute("/")({
