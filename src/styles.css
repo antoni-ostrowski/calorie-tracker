@@ -26,10 +26,14 @@
   --color-chart-3: hsl(var(--chart-3));
   --color-chart-4: hsl(var(--chart-4));
   --color-chart-5: hsl(var(--chart-5));
+  --color-protein: hsl(var(--protein));
+  --color-carb: hsl(var(--carb));
+  --color-fat: hsl(var(--fat));
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --font-manrope: "Manrope", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -59,6 +63,9 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+    --protein: 217 91% 60%;
+    --carb: 45 93% 47%;
+    --fat: 340 82% 52%;
   }
 
   .dark {
@@ -86,6 +93,9 @@
     --chart-3: 197 37% 24%;
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
+    --protein: 213 94% 68%;
+    --carb: 45 96% 56%;
+    --fat: 340 82% 58%;
   }
 }
 

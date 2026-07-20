@@ -2,33 +2,13 @@ import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, addDays, subDays } from "date-fns";
-import {
-  ChevronLeft,
-  ChevronRight,
-  ScanBarcode,
-  Search,
-  Trash2,
-  Sparkles,
-  Utensils,
-  ChevronDown,
-  Copy,
-} from "lucide-react";
-import { Badge } from "~/components/ui/badge";
+import { ChevronLeft, ChevronRight, Utensils } from "lucide-react";
 import { Progress } from "~/components/ui/progress";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "~/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { getDayByDate, deleteEntry, duplicateEntry } from "~/lib/api";
 import { cn } from "~/lib/utils";
+import { FoodCard } from "~/components/food-card";
+import { entryToFoodItem } from "~/lib/food";
 import type { Entry } from "~/db/schema";
 
 function getDateString(date: Date) {
@@ -176,11 +156,12 @@ function IndexPage() {
         ) : day?.entries && day.entries.length > 0 ? (
           <div className="flex flex-col gap-2">
             {day.entries.map((entry) => (
-              <EntryCard
+              <FoodCard
                 key={entry.id}
-                entry={entry}
+                item={entryToFoodItem(entry)}
                 onDelete={() => removeEntryMutation.mutate({ data: { id: entry.id! } })}
                 onDuplicate={() => duplicateEntryMutation.mutate({ data: { id: entry.id! } })}
+                details={<EntryDetails entry={entry} />}
               />
             ))}
           </div>
@@ -196,160 +177,41 @@ function IndexPage() {
   );
 }
 
-function EntryCard({
-  entry,
-  onDelete,
-  onDuplicate,
-}: {
-  entry: Entry;
-  onDelete: () => void;
-  onDuplicate: () => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
+function EntryDetails({ entry }: { entry: Entry }) {
   const aiDetails = parseAiDetails(entry);
-  const photoSrc = entry.filePath ? "api/img/" + entry.id : null;
+
   return (
-    <div className="rounded-xl border bg-card ">
-      <div
-        onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center justify-between p-3 text-left gap-4"
-      >
-        <div className="flex flex-col gap-2">
-          <div className="flex flex-row gap-2">
-            {photoSrc && (
-              <img
-                src={photoSrc}
-                alt={entry.name}
-                className="size-12 shrink-0 rounded-md border bg-muted object-cover"
-              />
-            )}
-            <div className="flex flex-col">
-              <span className="font-medium">{entry.name}</span>
-              <span className="text-xs text-muted-foreground">
-                {Math.round(entry.grams)}g · {Math.round(entry.calories)} kcal
-              </span>
-              <span className="mt-1 text-[10px] tabular-nums text-muted-foreground">
-                {format(entry.createdAt, "P p")}
-              </span>
-            </div>
-          </div>
+    <div>
+      <p className="text-xs font-medium text-foreground">{SOURCE_LABELS[entry.source]}</p>
 
-          <div className="flex items-center justify-between gap-3">
-            <Badge
-              variant="outline"
-              className="h-7 gap-1.5 border-border/60 bg-background/80 px-2.5 text-xs font-medium shadow-sm"
-            >
-              {entry.source === "ai" && <Sparkles className="size-3 text-amber-500" />}
-              {entry.source === "barcode" && <ScanBarcode className="size-3 text-blue-500" />}
-              {entry.source === "search" && <Search className="size-3 text-emerald-500" />}
-              {Math.round(entry.calories)} kcal
-            </Badge>
-
-            <div className="flex items-center gap-2">
-              <div className="flex items-center overflow-hidden rounded-full border border-border/50 bg-muted/60 p-1 shadow-sm">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDuplicate();
-                  }}
-                  className="flex size-9 items-center justify-center rounded-full text-amber-600 transition-all duration-150 hover:bg-amber-500/10 hover:text-amber-700 active:scale-90"
-                  aria-label="Duplicate entry"
-                >
-                  <Copy className="size-4" />
-                </button>
-                <span className="mx-0.5 h-4 w-px bg-border/80" />
-                <DeleteButton onConfirm={onDelete} />
-              </div>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setExpanded((v) => !v);
-                }}
-                className="flex size-8 items-center justify-center rounded-full bg-muted/60 text-muted-foreground transition-all duration-150 hover:bg-muted hover:text-foreground active:scale-90"
-                aria-label={expanded ? "Collapse details" : "Expand details"}
-              >
-                <ChevronDown
-                  className={`size-4 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
-                />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {expanded && (
-        <div className="border-t px-3 pb-3 pt-2">
-          <p className="text-xs font-medium text-foreground">{SOURCE_LABELS[entry.source]}</p>
-
-          {entry.source === "ai" && aiDetails && (
-            <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-              {aiDetails.confidence && (
-                <p>
-                  <span className="font-medium">Confidence:</span> {aiDetails.confidence}
-                </p>
-              )}
-              {(aiDetails.protein || aiDetails.carbs || aiDetails.fat) && (
-                <p>
-                  <span className="font-medium">Macros:</span>{" "}
-                  {["protein", "carbs", "fat"]
-                    .map((key) =>
-                      aiDetails[key] != null ? `${key}: ${Math.round(aiDetails[key])}g` : null,
-                    )
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-              )}
-              {aiDetails.reasoning && (
-                <p>
-                  <span className="font-medium">Reasoning:</span> {aiDetails.reasoning}
-                </p>
-              )}
-            </div>
+      {entry.source === "ai" && aiDetails && (
+        <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+          {aiDetails.confidence && (
+            <p>
+              <span className="font-medium">Confidence:</span> {aiDetails.confidence}
+            </p>
           )}
-
-          {entry.source === "meal" && entry.mealDetails && (
-            <MealDetails details={entry.mealDetails} />
+          {(aiDetails.protein || aiDetails.carbs || aiDetails.fat) && (
+            <p>
+              <span className="font-medium">Macros:</span>{" "}
+              {["protein", "carbs", "fat"]
+                .map((key) =>
+                  aiDetails[key] != null ? `${key}: ${Math.round(aiDetails[key])}g` : null,
+                )
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          )}
+          {aiDetails.reasoning && (
+            <p>
+              <span className="font-medium">Reasoning:</span> {aiDetails.reasoning}
+            </p>
           )}
         </div>
       )}
-    </div>
-  );
-}
 
-function DeleteButton({ onConfirm }: { onConfirm: () => void }) {
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <button
-          onClick={(e) => e.stopPropagation()}
-          className="flex size-9 items-center justify-center rounded-full text-rose-600 transition-all duration-150 hover:bg-rose-500/10 hover:text-rose-700 active:scale-90"
-          aria-label="Delete entry"
-        >
-          <Trash2 className="size-4" />
-        </button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete entry?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will permanently remove the entry. Cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            variant="destructive"
-            onClick={(e) => {
-              e.stopPropagation();
-              onConfirm();
-            }}
-          >
-            Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      {entry.source === "meal" && entry.mealDetails && <MealDetails details={entry.mealDetails} />}
+    </div>
   );
 }
 
