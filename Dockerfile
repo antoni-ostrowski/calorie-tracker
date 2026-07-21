@@ -1,4 +1,4 @@
-FROM node:22-slim AS builder
+FROM oven/bun:1.2-slim AS builder
 
 WORKDIR /app
 
@@ -10,12 +10,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY package.json ./
-RUN npm install
+COPY package.json bun.lock ./
+RUN bun install
 
 COPY . .
 RUN mkdir -p data/photos
-RUN npm run build
+RUN bun run build
 
 FROM node:22-slim AS runner
 
