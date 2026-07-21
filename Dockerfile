@@ -1,14 +1,18 @@
-FROM oven/bun:1.2-slim AS builder
+FROM node:22-slim AS builder
 
 WORKDIR /app
 
-# Install build tooling for native dependencies (better-sqlite3)
+# Install build tooling for native dependencies (better-sqlite3) + bun
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
     ca-certificates \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install bun (same Node 22 ABI as runner)
+RUN npm install -g bun
 
 COPY package.json bun.lock ./
 RUN bun install

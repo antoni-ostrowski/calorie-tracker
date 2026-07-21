@@ -1,14 +1,13 @@
 import { betterAuth } from "better-auth";
 import type { Auth } from "better-auth";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { username } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
-import Database from "better-sqlite3";
+import { db } from "~/db";
 import { env } from "~/env";
 
-const dbPath = env.DATABASE_URL;
-
 export const auth = betterAuth({
-  database: new Database(dbPath),
+  database: drizzleAdapter(db, { provider: "sqlite" }),
   secret: env.BETTER_AUTH_SECRET,
   baseURL: env.BETTER_AUTH_URL,
   emailAndPassword: { enabled: true, minPasswordLength: 3 },

@@ -1,6 +1,7 @@
 import { sqliteTable, integer, real, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+export * from "./auth-schema";
 
 export const days = sqliteTable(
   "days",
