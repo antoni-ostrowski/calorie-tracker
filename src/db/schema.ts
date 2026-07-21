@@ -1,27 +1,37 @@
-import { sqliteTable, integer, real, text } from "drizzle-orm/sqlite-core";
+import { sqliteTable, integer, real, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 
-export const days = sqliteTable("days", {
-  id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
-  date: text("date").notNull().unique(),
-  calorieGoal: integer("calorie_goal").notNull().default(2000),
-  createdAt: integer("created_at", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+export const days = sqliteTable(
+  "days",
+  {
+    id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
+    userId: text("user_id").notNull(),
+    date: text("date").notNull(),
+    calorieGoal: integer("calorie_goal").notNull().default(2000),
+    createdAt: integer("created_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [uniqueIndex("days_user_date_idx").on(table.userId, table.date)],
+);
 
 export const daysRelations = relations(days, ({ many }) => ({
   entries: many(entries),
 }));
 
-export const settings = sqliteTable("settings", {
-  id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
-  defaultCalorieGoal: integer("default_calorie_goal").notNull().default(2000),
-  updatedAt: integer("updated_at", { mode: "timestamp" })
-    .notNull()
-    .$defaultFn(() => new Date()),
-});
+export const settings = sqliteTable(
+  "settings",
+  {
+    id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
+    userId: text("user_id").notNull(),
+    defaultCalorieGoal: integer("default_calorie_goal").notNull().default(2000),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [uniqueIndex("settings_user_idx").on(table.userId)],
+);
 
 export const settingsRelations = relations(settings, ({ many }) => ({
   days: many(days),
@@ -29,6 +39,7 @@ export const settingsRelations = relations(settings, ({ many }) => ({
 
 export const entries = sqliteTable("entries", {
   id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull(),
   dayId: integer("day_id")
     .notNull()
     .references(() => days.id, { onDelete: "cascade" }),
@@ -58,6 +69,7 @@ export const entriesRelations = relations(entries, ({ one }) => ({
 
 export const meals = sqliteTable("meals", {
   id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull(),
   name: text("name").notNull(),
   calories: real("calories").notNull(),
   protein: real("protein"),
@@ -76,6 +88,7 @@ export const mealsRelations = relations(meals, ({ many }) => ({
 
 export const mealIngredients = sqliteTable("meal_ingredients", {
   id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
+  userId: text("user_id").notNull(),
   mealId: integer("meal_id")
     .notNull()
     .references(() => meals.id, { onDelete: "cascade" }),
@@ -100,19 +113,33 @@ export const mealIngredientsRelations = relations(mealIngredients, ({ one }) => 
   }),
 }));
 
-export const insertDaySchema = createInsertSchema(days).omit({ id: true, createdAt: true });
+export const insertDaySchema = createInsertSchema(days).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+});
 export const selectDaySchema = createSelectSchema(days);
-export const insertEntrySchema = createInsertSchema(entries).omit({ id: true, createdAt: true });
+export const insertEntrySchema = createInsertSchema(entries).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+});
 export const selectEntrySchema = createSelectSchema(entries);
 export const insertSettingsSchema = createInsertSchema(settings).omit({
   id: true,
+  userId: true,
   updatedAt: true,
 });
 export const selectSettingsSchema = createSelectSchema(settings);
-export const insertMealSchema = createInsertSchema(meals).omit({ id: true, createdAt: true });
+export const insertMealSchema = createInsertSchema(meals).omit({
+  id: true,
+  userId: true,
+  createdAt: true,
+});
 export const selectMealSchema = createSelectSchema(meals);
 export const insertMealIngredientSchema = createInsertSchema(mealIngredients).omit({
   id: true,
+  userId: true,
   createdAt: true,
 });
 export const selectMealIngredientSchema = createSelectSchema(mealIngredients);

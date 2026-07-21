@@ -1,17 +1,20 @@
 import { createServerFn } from "@tanstack/react-start";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 import fs from "fs/promises";
 import path from "path";
 import { db } from "~/db";
 import { days, entries, mealIngredients, meals, settings } from "~/db/schema";
 import { env } from "~/env";
+import { getSessionOrThrow } from "~/lib/auth-functions";
 import type { MealWithIngredients } from "~/db/schema";
 
-async function getOrCreateSettings() {
-  let row = await db.query.settings.findFirst();
+async function getOrCreateSettings(userId: string) {
+  let row = await db.query.settings.findFirst({
+    where: eq(settings.userId, userId),
+  });
   if (!row) {
-    const [created] = await db.insert(settings).values({}).returning();
+    const [created] = await db.insert(settings).values({ userId }).returning();
     row = created;
   }
   return row;
@@ -19,14 +22,16 @@ async function getOrCreateSettings() {
 
 export const getSettings = createServerFn({ method: "GET" }).handler(async () => {
   console.log("[getSettings] called");
-  return getOrCreateSettings();
+  const session = await getSessionOrThrow();
+  return getOrCreateSettings(session.user.id);
 });
 
 export const updateSettings = createServerFn({ method: "POST" })
   .inputValidator(z.object({ defaultCalorieGoal: z.number().min(500).max(20000) }))
   .handler(async ({ data }) => {
     console.log("[updateSettings] called", { defaultCalorieGoal: data.defaultCalorieGoal });
-    const row = await getOrCreateSettings();
+    const session = await getSessionOrThrow();
+    const row = await getOrCreateSettings(session.user.id);
     const [updated] = await db
       .update(settings)
       .set({ defaultCalorieGoal: data.defaultCalorieGoal, updatedAt: new Date() })
@@ -39,8 +44,11 @@ export const getDayByDate = createServerFn({ method: "GET" })
   .inputValidator(z.object({ date: z.string() }))
   .handler(async ({ data }) => {
     console.log("[getDayByDate] called", { date: data.date });
+    const session = await getSessionOrThrow();
+    const userId = session.user.id;
+
     const day = await db.query.days.findFirst({
-      where: eq(days.date, data.date),
+      where: and(eq(days.userId, userId), eq(days.date, data.date)),
       with: {
         entries: {
           orderBy: desc(entries.createdAt),
@@ -50,10 +58,10 @@ export const getDayByDate = createServerFn({ method: "GET" })
 
     if (!day) {
       console.log("[getDayByDate] day not found, creating new day", { date: data.date });
-      const { defaultCalorieGoal } = await getOrCreateSettings();
+      const { defaultCalorieGoal } = await getOrCreateSettings(userId);
       const [newDay] = await db
         .insert(days)
-        .values({ date: data.date, calorieGoal: defaultCalorieGoal })
+        .values({ userId, date: data.date, calorieGoal: defaultCalorieGoal })
         .returning();
       return { ...newDay, entries: [] };
     }
@@ -66,7 +74,9 @@ export const getDayHistory = createServerFn({ method: "GET" })
   .inputValidator(z.object({ limit: z.number().default(30) }))
   .handler(async ({ data }) => {
     console.log("[getDayHistory] called", { limit: data.limit });
+    const session = await getSessionOrThrow();
     const allDays = await db.query.days.findMany({
+      where: eq(days.userId, session.user.id),
       orderBy: desc(days.date),
       limit: data.limit,
       with: {
@@ -81,7 +91,11 @@ export const updateDayGoal = createServerFn({ method: "POST" })
   .inputValidator(z.object({ date: z.string(), calorieGoal: z.number().min(500).max(20000) }))
   .handler(async ({ data }) => {
     console.log("[updateDayGoal] called", { date: data.date, calorieGoal: data.calorieGoal });
-    await db.update(days).set({ calorieGoal: data.calorieGoal }).where(eq(days.date, data.date));
+    const session = await getSessionOrThrow();
+    await db
+      .update(days)
+      .set({ calorieGoal: data.calorieGoal })
+      .where(and(eq(days.userId, session.user.id), eq(days.date, data.date)));
     return { success: true };
   });
 
@@ -122,16 +136,19 @@ export const createEntry = createServerFn({ method: "POST" })
       calories: data.calories,
       source: data.source,
     });
+    const session = await getSessionOrThrow();
+    const userId = session.user.id;
+
     let day = await db.query.days.findFirst({
-      where: eq(days.date, data.date),
+      where: and(eq(days.userId, userId), eq(days.date, data.date)),
     });
 
     if (!day) {
       console.log("[createEntry] day not found, creating new day", { date: data.date });
-      const { defaultCalorieGoal } = await getOrCreateSettings();
+      const { defaultCalorieGoal } = await getOrCreateSettings(userId);
       const [newDay] = await db
         .insert(days)
-        .values({ date: data.date, calorieGoal: defaultCalorieGoal })
+        .values({ userId, date: data.date, calorieGoal: defaultCalorieGoal })
         .returning();
       day = newDay;
     }
@@ -148,6 +165,7 @@ export const createEntry = createServerFn({ method: "POST" })
     const [entry] = await db
       .insert(entries)
       .values({
+        userId,
         dayId: day.id,
         name: data.name,
         calories: data.calories,
@@ -171,7 +189,10 @@ export const deleteEntry = createServerFn({ method: "POST" })
   .inputValidator(z.object({ id: z.number() }))
   .handler(async ({ data }) => {
     console.log("[deleteEntry] called", { id: data.id });
-    await db.delete(entries).where(eq(entries.id, data.id));
+    const session = await getSessionOrThrow();
+    await db
+      .delete(entries)
+      .where(and(eq(entries.id, data.id), eq(entries.userId, session.user.id)));
     return { success: true };
   });
 
@@ -179,8 +200,10 @@ export const duplicateEntry = createServerFn({ method: "POST" })
   .inputValidator(z.object({ id: z.number() }))
   .handler(async ({ data }) => {
     console.log("[duplicateEntry] called", { id: data.id });
+    const session = await getSessionOrThrow();
+    const userId = session.user.id;
     const entry = await db.query.entries.findFirst({
-      where: eq(entries.id, data.id),
+      where: and(eq(entries.id, data.id), eq(entries.userId, userId)),
     });
 
     if (!entry) {
@@ -209,6 +232,7 @@ export const duplicateEntry = createServerFn({ method: "POST" })
     const [newEntry] = await db
       .insert(entries)
       .values({
+        userId,
         dayId: entry.dayId,
         name: entry.name,
         calories: entry.calories,
@@ -252,7 +276,9 @@ function totalsFromIngredients(ingredients: IngredientInput[]) {
 
 export const getMeals = createServerFn({ method: "GET" }).handler(async () => {
   console.log("[getMeals] called");
+  const session = await getSessionOrThrow();
   const rows = await db.query.meals.findMany({
+    where: eq(meals.userId, session.user.id),
     with: {
       ingredients: {
         orderBy: (mealIngredients, { asc }) => [asc(mealIngredients.id)],
@@ -274,6 +300,8 @@ export const createMeal = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     console.log("[createMeal] called", { name: data.name, ingredients: data.ingredients.length });
+    const session = await getSessionOrThrow();
+    const userId = session.user.id;
     const totals = totalsFromIngredients(data.ingredients);
 
     let filePath = "";
@@ -288,6 +316,7 @@ export const createMeal = createServerFn({ method: "POST" })
     const [meal] = await db
       .insert(meals)
       .values({
+        userId,
         name: data.name,
         calories: totals.calories,
         protein: totals.protein,
@@ -300,6 +329,7 @@ export const createMeal = createServerFn({ method: "POST" })
 
     await db.insert(mealIngredients).values(
       data.ingredients.map((i) => ({
+        userId,
         mealId: meal.id,
         name: i.name,
         calories: i.calories,
@@ -325,13 +355,18 @@ export const updateMeal = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     console.log("[updateMeal] called", { id: data.id, name: data.name });
+    const session = await getSessionOrThrow();
+    const userId = session.user.id;
     const totals = totalsFromIngredients(data.ingredients);
 
     const existing = await db.query.meals.findFirst({
-      where: eq(meals.id, data.id),
+      where: and(eq(meals.id, data.id), eq(meals.userId, userId)),
     });
+    if (!existing) {
+      throw new Error("Meal not found");
+    }
 
-    let filePath = existing?.filePath ?? "";
+    let filePath = existing.filePath ?? "";
     if (data.photoStr === null) {
       filePath = "";
     } else if (data.photoStr) {
@@ -353,11 +388,12 @@ export const updateMeal = createServerFn({ method: "POST" })
         grams: totals.grams,
         filePath,
       })
-      .where(eq(meals.id, data.id));
+      .where(and(eq(meals.id, data.id), eq(meals.userId, userId)));
 
     await db.delete(mealIngredients).where(eq(mealIngredients.mealId, data.id));
     await db.insert(mealIngredients).values(
       data.ingredients.map((i) => ({
+        userId,
         mealId: data.id,
         name: i.name,
         calories: i.calories,
@@ -376,7 +412,8 @@ export const deleteMeal = createServerFn({ method: "POST" })
   .inputValidator(z.object({ id: z.number() }))
   .handler(async ({ data }) => {
     console.log("[deleteMeal] called", { id: data.id });
-    await db.delete(meals).where(eq(meals.id, data.id));
+    const session = await getSessionOrThrow();
+    await db.delete(meals).where(and(eq(meals.id, data.id), eq(meals.userId, session.user.id)));
     return { success: true };
   });
 
@@ -390,8 +427,11 @@ export const createMealEntry = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     console.log("[createMealEntry] called", { id: data.id, date: data.date, grams: data.grams });
+    const session = await getSessionOrThrow();
+    const userId = session.user.id;
+
     const meal = await db.query.meals.findFirst({
-      where: eq(meals.id, data.id),
+      where: and(eq(meals.id, data.id), eq(meals.userId, userId)),
       with: {
         ingredients: true,
       },
@@ -402,14 +442,14 @@ export const createMealEntry = createServerFn({ method: "POST" })
     }
 
     let day = await db.query.days.findFirst({
-      where: eq(days.date, data.date),
+      where: and(eq(days.userId, userId), eq(days.date, data.date)),
     });
 
     if (!day) {
-      const { defaultCalorieGoal } = await getOrCreateSettings();
+      const { defaultCalorieGoal } = await getOrCreateSettings(userId);
       const [newDay] = await db
         .insert(days)
-        .values({ date: data.date, calorieGoal: defaultCalorieGoal })
+        .values({ userId, date: data.date, calorieGoal: defaultCalorieGoal })
         .returning();
       day = newDay;
     }
@@ -452,6 +492,7 @@ export const createMealEntry = createServerFn({ method: "POST" })
     const [entry] = await db
       .insert(entries)
       .values({
+        userId,
         dayId: day.id,
         name: meal.name,
         calories,

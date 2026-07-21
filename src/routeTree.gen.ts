@@ -10,14 +10,21 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiMealImgIdRouteImport } from './routes/api/meal-img/$id'
 import { Route as ApiImgIdRouteImport } from './routes/api/img/$id'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HistoryRoute = HistoryRouteImport.update({
@@ -40,18 +47,27 @@ const ApiImgIdRoute = ApiImgIdRouteImport.update({
   path: '/api/img/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/history': typeof HistoryRoute
+  '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/img/$id': typeof ApiImgIdRoute
   '/api/meal-img/$id': typeof ApiMealImgIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/history': typeof HistoryRoute
+  '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/img/$id': typeof ApiImgIdRoute
   '/api/meal-img/$id': typeof ApiMealImgIdRoute
 }
@@ -59,7 +75,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/history': typeof HistoryRoute
+  '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/img/$id': typeof ApiImgIdRoute
   '/api/meal-img/$id': typeof ApiMealImgIdRoute
 }
@@ -68,16 +86,27 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/history'
+    | '/login'
     | '/settings'
+    | '/api/auth/$'
     | '/api/img/$id'
     | '/api/meal-img/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/history' | '/settings' | '/api/img/$id' | '/api/meal-img/$id'
+  to:
+    | '/'
+    | '/history'
+    | '/login'
+    | '/settings'
+    | '/api/auth/$'
+    | '/api/img/$id'
+    | '/api/meal-img/$id'
   id:
     | '__root__'
     | '/'
     | '/history'
+    | '/login'
     | '/settings'
+    | '/api/auth/$'
     | '/api/img/$id'
     | '/api/meal-img/$id'
   fileRoutesById: FileRoutesById
@@ -85,7 +114,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HistoryRoute: typeof HistoryRoute
+  LoginRoute: typeof LoginRoute
   SettingsRoute: typeof SettingsRoute
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiImgIdRoute: typeof ApiImgIdRoute
   ApiMealImgIdRoute: typeof ApiMealImgIdRoute
 }
@@ -97,6 +128,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/history': {
@@ -127,13 +165,22 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiImgIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HistoryRoute: HistoryRoute,
+  LoginRoute: LoginRoute,
   SettingsRoute: SettingsRoute,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiImgIdRoute: ApiImgIdRoute,
   ApiMealImgIdRoute: ApiMealImgIdRoute,
 }

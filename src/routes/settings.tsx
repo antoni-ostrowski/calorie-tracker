@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { Minus, Plus, Save, Settings2, Target, Utensils } from "lucide-react";
+import { LogOut, Minus, Plus, Save, Settings2, Target, Utensils } from "lucide-react";
 import { PageHeader } from "~/components/page-header";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
@@ -17,6 +17,7 @@ import {
   updateMeal,
   deleteMeal,
 } from "~/lib/api";
+import { signOut } from "~/lib/auth-client";
 import { MealBuilderDialog } from "~/components/meal-builder-dialog";
 import { toast } from "sonner";
 import type { MealWithIngredients } from "~/db/schema";
@@ -97,6 +98,15 @@ function SettingsPage() {
   });
 
   const changed = settings ? draft !== settings.defaultCalorieGoal : false;
+
+  async function handleSignOut() {
+    const { error } = await signOut();
+    if (error) {
+      toast.error(error.message || "Sign out failed");
+    } else {
+      window.location.href = "/login";
+    }
+  }
 
   const clamp = (n: number) => Math.min(MAX, Math.max(MIN, Math.round(n / STEP) * STEP));
   const bump = (delta: number) => setDraft((v) => clamp(v + delta));
@@ -278,6 +288,16 @@ function SettingsPage() {
             </div>
           )}
         </div>
+
+        <Button
+          variant="outline"
+          className="mt-8 w-full rounded-xl"
+          size="lg"
+          onClick={handleSignOut}
+        >
+          <LogOut className="mr-2 size-4" />
+          Sign out
+        </Button>
       </main>
 
       <MealBuilderDialog

@@ -43,6 +43,13 @@
       "when": 1784562449852,
       "tag": "0005_sturdy_sway",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1784634095749,
+      "tag": "0006_bitter_multiple_man",
+      "breakpoints": true
     }
   ]
 }
