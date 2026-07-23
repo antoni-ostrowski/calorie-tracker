@@ -8,170 +8,170 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as HistoryRouteImport } from './routes/history'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiMealImgIdRouteImport } from './routes/api/meal-img/$id'
-import { Route as ApiImgIdRouteImport } from './routes/api/img/$id'
-import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as rootRouteImport } from "./routes/__root";
+import { Route as SettingsRouteImport } from "./routes/settings";
+import { Route as LoginRouteImport } from "./routes/login";
+import { Route as HistoryRouteImport } from "./routes/history";
+import { Route as IndexRouteImport } from "./routes/index";
+import { Route as ApiMealImgIdRouteImport } from "./routes/api/meal-img/$id";
+import { Route as ApiImgIdRouteImport } from "./routes/api/img/$id";
+import { Route as ApiAuthSplatRouteImport } from "./routes/api/auth/$";
 
 const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
+  id: "/settings",
+  path: "/settings",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+  id: "/login",
+  path: "/login",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const HistoryRoute = HistoryRouteImport.update({
-  id: '/history',
-  path: '/history',
+  id: "/history",
+  path: "/history",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+  id: "/",
+  path: "/",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const ApiMealImgIdRoute = ApiMealImgIdRouteImport.update({
-  id: '/api/meal-img/$id',
-  path: '/api/meal-img/$id',
+  id: "/api/meal-img/$id",
+  path: "/api/meal-img/$id",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const ApiImgIdRoute = ApiImgIdRouteImport.update({
-  id: '/api/img/$id',
-  path: '/api/img/$id',
+  id: "/api/img/$id",
+  path: "/api/img/$id",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
-  id: '/api/auth/$',
-  path: '/api/auth/$',
+  id: "/api/auth/$",
+  path: "/api/auth/$",
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any);
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '/history': typeof HistoryRoute
-  '/login': typeof LoginRoute
-  '/settings': typeof SettingsRoute
-  '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/img/$id': typeof ApiImgIdRoute
-  '/api/meal-img/$id': typeof ApiMealImgIdRoute
+  "/": typeof IndexRoute;
+  "/history": typeof HistoryRoute;
+  "/login": typeof LoginRoute;
+  "/settings": typeof SettingsRoute;
+  "/api/auth/$": typeof ApiAuthSplatRoute;
+  "/api/img/$id": typeof ApiImgIdRoute;
+  "/api/meal-img/$id": typeof ApiMealImgIdRoute;
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '/history': typeof HistoryRoute
-  '/login': typeof LoginRoute
-  '/settings': typeof SettingsRoute
-  '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/img/$id': typeof ApiImgIdRoute
-  '/api/meal-img/$id': typeof ApiMealImgIdRoute
+  "/": typeof IndexRoute;
+  "/history": typeof HistoryRoute;
+  "/login": typeof LoginRoute;
+  "/settings": typeof SettingsRoute;
+  "/api/auth/$": typeof ApiAuthSplatRoute;
+  "/api/img/$id": typeof ApiImgIdRoute;
+  "/api/meal-img/$id": typeof ApiMealImgIdRoute;
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
-  '/': typeof IndexRoute
-  '/history': typeof HistoryRoute
-  '/login': typeof LoginRoute
-  '/settings': typeof SettingsRoute
-  '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/img/$id': typeof ApiImgIdRoute
-  '/api/meal-img/$id': typeof ApiMealImgIdRoute
+  __root__: typeof rootRouteImport;
+  "/": typeof IndexRoute;
+  "/history": typeof HistoryRoute;
+  "/login": typeof LoginRoute;
+  "/settings": typeof SettingsRoute;
+  "/api/auth/$": typeof ApiAuthSplatRoute;
+  "/api/img/$id": typeof ApiImgIdRoute;
+  "/api/meal-img/$id": typeof ApiMealImgIdRoute;
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
+  fileRoutesByFullPath: FileRoutesByFullPath;
   fullPaths:
-    | '/'
-    | '/history'
-    | '/login'
-    | '/settings'
-    | '/api/auth/$'
-    | '/api/img/$id'
-    | '/api/meal-img/$id'
-  fileRoutesByTo: FileRoutesByTo
+    | "/"
+    | "/history"
+    | "/login"
+    | "/settings"
+    | "/api/auth/$"
+    | "/api/img/$id"
+    | "/api/meal-img/$id";
+  fileRoutesByTo: FileRoutesByTo;
   to:
-    | '/'
-    | '/history'
-    | '/login'
-    | '/settings'
-    | '/api/auth/$'
-    | '/api/img/$id'
-    | '/api/meal-img/$id'
+    | "/"
+    | "/history"
+    | "/login"
+    | "/settings"
+    | "/api/auth/$"
+    | "/api/img/$id"
+    | "/api/meal-img/$id";
   id:
-    | '__root__'
-    | '/'
-    | '/history'
-    | '/login'
-    | '/settings'
-    | '/api/auth/$'
-    | '/api/img/$id'
-    | '/api/meal-img/$id'
-  fileRoutesById: FileRoutesById
+    | "__root__"
+    | "/"
+    | "/history"
+    | "/login"
+    | "/settings"
+    | "/api/auth/$"
+    | "/api/img/$id"
+    | "/api/meal-img/$id";
+  fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  HistoryRoute: typeof HistoryRoute
-  LoginRoute: typeof LoginRoute
-  SettingsRoute: typeof SettingsRoute
-  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
-  ApiImgIdRoute: typeof ApiImgIdRoute
-  ApiMealImgIdRoute: typeof ApiMealImgIdRoute
+  IndexRoute: typeof IndexRoute;
+  HistoryRoute: typeof HistoryRoute;
+  LoginRoute: typeof LoginRoute;
+  SettingsRoute: typeof SettingsRoute;
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute;
+  ApiImgIdRoute: typeof ApiImgIdRoute;
+  ApiMealImgIdRoute: typeof ApiMealImgIdRoute;
 }
 
-declare module '@tanstack/react-router' {
+declare module "@tanstack/react-router" {
   interface FileRoutesByPath {
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/history': {
-      id: '/history'
-      path: '/history'
-      fullPath: '/history'
-      preLoaderRoute: typeof HistoryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/meal-img/$id': {
-      id: '/api/meal-img/$id'
-      path: '/api/meal-img/$id'
-      fullPath: '/api/meal-img/$id'
-      preLoaderRoute: typeof ApiMealImgIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/img/$id': {
-      id: '/api/img/$id'
-      path: '/api/img/$id'
-      fullPath: '/api/img/$id'
-      preLoaderRoute: typeof ApiImgIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/auth/$': {
-      id: '/api/auth/$'
-      path: '/api/auth/$'
-      fullPath: '/api/auth/$'
-      preLoaderRoute: typeof ApiAuthSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
+    "/settings": {
+      id: "/settings";
+      path: "/settings";
+      fullPath: "/settings";
+      preLoaderRoute: typeof SettingsRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/login": {
+      id: "/login";
+      path: "/login";
+      fullPath: "/login";
+      preLoaderRoute: typeof LoginRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/history": {
+      id: "/history";
+      path: "/history";
+      fullPath: "/history";
+      preLoaderRoute: typeof HistoryRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/": {
+      id: "/";
+      path: "/";
+      fullPath: "/";
+      preLoaderRoute: typeof IndexRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/api/meal-img/$id": {
+      id: "/api/meal-img/$id";
+      path: "/api/meal-img/$id";
+      fullPath: "/api/meal-img/$id";
+      preLoaderRoute: typeof ApiMealImgIdRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/api/img/$id": {
+      id: "/api/img/$id";
+      path: "/api/img/$id";
+      fullPath: "/api/img/$id";
+      preLoaderRoute: typeof ApiImgIdRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/api/auth/$": {
+      id: "/api/auth/$";
+      path: "/api/auth/$";
+      fullPath: "/api/auth/$";
+      preLoaderRoute: typeof ApiAuthSplatRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
   }
 }
 
@@ -183,16 +183,16 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiImgIdRoute: ApiImgIdRoute,
   ApiMealImgIdRoute: ApiMealImgIdRoute,
-}
+};
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+  ._addFileTypes<FileRouteTypes>();
 
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
+import type { getRouter } from "./router.tsx";
+import type { createStart } from "@tanstack/react-start";
+declare module "@tanstack/react-start" {
   interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
+    ssr: true;
+    router: Awaited<ReturnType<typeof getRouter>>;
   }
 }
