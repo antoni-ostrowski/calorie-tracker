@@ -8,7 +8,7 @@ steps:
       - git pull origin main
       - docker build -t antost360/calorie-tracker:latest .
       - cd /home/antost/homelab
-      - docker up -d calorie-tracker
+      - docker compose up -d calorie-tracker
       - docker image prune -f
     when:
       branch: main
