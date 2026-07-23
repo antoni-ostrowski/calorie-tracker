@@ -25,8 +25,11 @@ steps:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/antost/homelab:/home/antost/homelab:ro
+    environment:
+      DOCKERHUB_PASSWORD:
+        from_secret: DOCKERHUB_PASSWORD 
     commands:
-      - docker login -u antost360 -p $DOCKERHUB_PASSWORD
+      - echo "$DOCKERHUB_PASSWORD" | docker login -u antost360 --password-stdin
       - docker push antost360/calorie-tracker:latest
       - cd /home/antost/homelab && docker compose --profile calorie-tracker up -d calorie-tracker
       - docker image prune -f
