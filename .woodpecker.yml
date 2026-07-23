@@ -26,9 +26,10 @@ steps:
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/antost/homelab:/home/antost/homelab:ro
     commands:
+      - docker login -u antost360 -p $DOCKERHUB_PASSWORD
+      - docker push antost360/calorie-tracker:latest
       - cd /home/antost/homelab && docker compose --profile calorie-tracker up -d calorie-tracker
       - docker image prune -f
-      - docker image push antost360/calorie-tracker:latest
     when:
       - event: push
         branch: main
