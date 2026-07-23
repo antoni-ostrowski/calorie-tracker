@@ -11,5 +11,5 @@ steps:
       - docker compose up -d calorie-tracker
       - docker image prune -f
     when:
-      branch: main
-      event: push
+      - event: push
+        branch: main
