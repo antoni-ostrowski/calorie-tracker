@@ -92,7 +92,7 @@ bun run build
 bun run preview
 ```
 
-Then put it behind a reverse proxy like Caddy or nginx and you're good to go.
+Then put it behind a reverse proxy like Caddy or nginx and you're good to go!
 
 ## Media
 
