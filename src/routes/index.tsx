@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, addDays, subDays } from "date-fns";
@@ -24,17 +23,18 @@ const SOURCE_LABELS: Record<Entry["source"], string> = {
 
 function IndexPage() {
   const { date: urlDate } = Route.useSearch();
-  const [currentDate, setCurrentDate] = useState(() => {
+  const navigate = useNavigate();
+
+  const currentDate = (() => {
     if (urlDate) {
       const d = new Date(urlDate + "T00:00:00");
       return isNaN(d.getTime()) ? new Date() : d;
     }
     return new Date();
-  });
+  })();
   const dateStr = getDateString(currentDate);
 
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
 
   const { data: day, isLoading } = useQuery({
     queryKey: ["day", dateStr],
@@ -69,12 +69,11 @@ function IndexPage() {
   const progress = Math.min((totalCalories / goal) * 100, 100);
   const remaining = Math.max(goal - totalCalories, 0);
 
-  const goToPrevDay = () => setCurrentDate((d) => subDays(d, 1));
-  const goToNextDay = () => setCurrentDate((d) => addDays(d, 1));
-  const goToToday = () => {
-    navigate({ to: "/", search: {} });
-    setCurrentDate(new Date());
-  };
+  const goToPrevDay = () =>
+    navigate({ to: "/", search: { date: getDateString(subDays(currentDate, 1)) } });
+  const goToNextDay = () =>
+    navigate({ to: "/", search: { date: getDateString(addDays(currentDate, 1)) } });
+  const goToToday = () => navigate({ to: "/", search: {} });
   const isToday = dateStr === getDateString(new Date());
 
   return (
