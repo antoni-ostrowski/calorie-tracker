@@ -3,12 +3,10 @@ steps:
     image: docker:27-dind
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - /home/antost/homelab:/homelab:ro
     commands:
-      - cd /home/antost/woodpecker-repos/calorie-tracker
-      - git pull origin main
       - docker build -t antost360/calorie-tracker:latest .
-      - cd /home/antost/homelab
-      - docker compose up -d calorie-tracker
+      - cd /homelab && docker compose --profile calorie-tracker up -d calorie-tracker
       - docker image prune -f
     when:
       - event: push
