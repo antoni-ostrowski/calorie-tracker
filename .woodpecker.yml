@@ -1,11 +1,31 @@
 steps:
+  check:
+    image: oven/bun:latest
+    commands:
+      - bun install
+      - bun run check
+    when:
+      - event: pull_request
+      - event: push
+        branch: main
+
+  build:
+    image: docker:27-dind
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    commands:
+      - docker build -t antost360/calorie-tracker:latest .
+    when:
+      - event: pull_request
+      - event: push
+        branch: main
+
   deploy:
     image: docker:27-dind
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /home/antost/homelab:/homelab:ro
     commands:
-      - docker build -t antost360/calorie-tracker:latest .
       - cd /homelab && docker compose --profile calorie-tracker up -d calorie-tracker
       - docker image prune -f
     when:
