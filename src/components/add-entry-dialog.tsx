@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
-import { Plus, Sparkles, ScanBarcode, Search, Utensils, Check, X } from "lucide-react";
+import { Plus, Sparkles, ScanBarcode, Search, Utensils, Check, X, Loader2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -54,7 +54,8 @@ export interface EntryData {
 interface TabProps {
   date: string;
   onAdd: (data: EntryData) => void;
-  onClose: () => void;
+  onClose?: () => void;
+  isPending: boolean;
 }
 
 export function AddEntryDialog({ date }: AddEntryDialogProps) {
@@ -67,6 +68,7 @@ export function AddEntryDialog({ date }: AddEntryDialogProps) {
       queryClient.invalidateQueries({ queryKey: ["day", date] });
       queryClient.invalidateQueries({ queryKey: ["history"] });
       toast.success("Entry added");
+      setOpen(false);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -105,19 +107,19 @@ export function AddEntryDialog({ date }: AddEntryDialogProps) {
           </TabsList>
 
           <TabsContent value="ai">
-            <AIPhotoTab date={date} onAdd={handleAdd} onClose={() => setOpen(false)} />
+            <AIPhotoTab date={date} onAdd={handleAdd} isPending={addEntryMutation.isPending} />
           </TabsContent>
 
           <TabsContent value="barcode">
-            <BarcodeTab date={date} onAdd={handleAdd} onClose={() => setOpen(false)} />
+            <BarcodeTab date={date} onAdd={handleAdd} isPending={addEntryMutation.isPending} />
           </TabsContent>
 
           <TabsContent value="search">
-            <SearchTab date={date} onAdd={handleAdd} onClose={() => setOpen(false)} />
+            <SearchTab date={date} onAdd={handleAdd} isPending={addEntryMutation.isPending} />
           </TabsContent>
 
           <TabsContent value="meals">
-            <MealsTab date={date} onAdd={handleAdd} onClose={() => setOpen(false)} />
+            <MealsTab date={date} onClose={() => setOpen(false)} />
           </TabsContent>
         </Tabs>
       </DialogContent>
@@ -125,7 +127,7 @@ export function AddEntryDialog({ date }: AddEntryDialogProps) {
   );
 }
 
-function AIPhotoTab({ date, onAdd, onClose }: TabProps) {
+function AIPhotoTab({ date, onAdd, isPending }: TabProps) {
   const [photo, setPhoto] = useState<string | null>(null);
   const [context, setContext] = useState("");
   const [result, setResult] = useState<any>(null);
@@ -162,7 +164,7 @@ function AIPhotoTab({ date, onAdd, onClose }: TabProps) {
   };
 
   const handleAccept = () => {
-    if (!result) return;
+    if (!result || isPending) return;
     onAdd({
       date,
       name: result.name,
@@ -175,7 +177,6 @@ function AIPhotoTab({ date, onAdd, onClose }: TabProps) {
       aiDetails: result,
       photoStr: photo,
     });
-    onClose();
   };
 
   const handleDecline = () => {
@@ -222,8 +223,12 @@ function AIPhotoTab({ date, onAdd, onClose }: TabProps) {
             <X className="mr-1 size-4" />
             Revise
           </Button>
-          <Button className="flex-1" onClick={handleAccept}>
-            <Check className="mr-1 size-4" />
+          <Button className="flex-1" onClick={handleAccept} disabled={isPending}>
+            {isPending ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Check className="mr-1 size-4" />
+            )}
             Add
           </Button>
         </div>
@@ -303,7 +308,7 @@ function AIPhotoTab({ date, onAdd, onClose }: TabProps) {
   );
 }
 
-function BarcodeTab({ date, onAdd, onClose }: TabProps) {
+function BarcodeTab({ date, onAdd, isPending }: TabProps) {
   const [selected, setSelected] = useState<FoodInfo | null>(null);
 
   if (selected) {
@@ -311,6 +316,7 @@ function BarcodeTab({ date, onAdd, onClose }: TabProps) {
       <FoodAmountForm
         food={selected}
         source="barcode"
+        isPending={isPending}
         onConfirm={(ingredient) => {
           onAdd({
             date,
@@ -322,7 +328,6 @@ function BarcodeTab({ date, onAdd, onClose }: TabProps) {
             grams: ingredient.grams,
             source: "barcode",
           });
-          onClose();
         }}
         onCancel={() => setSelected(null)}
       />
@@ -332,7 +337,7 @@ function BarcodeTab({ date, onAdd, onClose }: TabProps) {
   return <BarcodeLookup onSelect={setSelected} />;
 }
 
-function SearchTab({ date, onAdd, onClose }: TabProps) {
+function SearchTab({ date, onAdd, isPending }: TabProps) {
   const [selected, setSelected] = useState<FoodInfo | null>(null);
 
   if (selected) {
@@ -340,6 +345,7 @@ function SearchTab({ date, onAdd, onClose }: TabProps) {
       <FoodAmountForm
         food={selected}
         source="search"
+        isPending={isPending}
         onConfirm={(ingredient) => {
           onAdd({
             date,
@@ -351,7 +357,6 @@ function SearchTab({ date, onAdd, onClose }: TabProps) {
             grams: ingredient.grams,
             source: "search",
           });
-          onClose();
         }}
         onCancel={() => setSelected(null)}
       />
@@ -361,7 +366,7 @@ function SearchTab({ date, onAdd, onClose }: TabProps) {
   return <SearchLookup onSelect={setSelected} />;
 }
 
-function MealsTab({ date, onClose }: TabProps) {
+function MealsTab({ date, onClose }: { date: string; onClose: () => void }) {
   const queryClient = useQueryClient();
   const { data: meals, isLoading } = useQuery({
     queryKey: ["meals"],

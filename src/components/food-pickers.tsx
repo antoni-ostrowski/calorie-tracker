@@ -46,6 +46,7 @@ export function FoodAmountForm({
   source,
   defaultGrams = 100,
   actionLabel = "Add",
+  isPending = false,
   onConfirm,
   onCancel,
 }: {
@@ -53,6 +54,7 @@ export function FoodAmountForm({
   source: "barcode" | "search";
   defaultGrams?: number;
   actionLabel?: string;
+  isPending?: boolean;
   onConfirm: (ingredient: IngredientDraft) => void;
   onCancel: () => void;
 }) {
@@ -89,8 +91,16 @@ export function FoodAmountForm({
           <X className="mr-1 size-4" />
           Back
         </Button>
-        <Button className="flex-1" onClick={() => onConfirm(makeIngredient(food, grams, source))}>
-          <Check className="mr-1 size-4" />
+        <Button
+          className="flex-1"
+          onClick={() => onConfirm(makeIngredient(food, grams, source))}
+          disabled={isPending}
+        >
+          {isPending ? (
+            <Loader2 className="mr-2 size-4 animate-spin" />
+          ) : (
+            <Check className="mr-1 size-4" />
+          )}
           {actionLabel}
         </Button>
       </div>
