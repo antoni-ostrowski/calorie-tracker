@@ -27,7 +27,7 @@ steps:
       - /home/antost/homelab:/home/antost/homelab:ro
     environment:
       DOCKERHUB_PASSWORD:
-        from_secret: DOCKERHUB_PASSWORD 
+        from_secret: DOCKERHUB_PASSWORD
     commands:
       - echo "$DOCKERHUB_PASSWORD" | docker login -u antost360 --password-stdin
       - docker push antost360/calorie-tracker:latest

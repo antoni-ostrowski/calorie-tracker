@@ -141,33 +141,44 @@ export function BarcodeLookup({ onSelect }: { onSelect: (food: FoodInfo) => void
 
     (async () => {
       try {
-        const cameras = await Html5Qrcode.getCameras();
-        if (!active) return;
-
-        if (!cameras || cameras.length === 0) {
-          setScannerError("No camera found");
-          setScanning(false);
-          return;
-        }
-
-        const preferred = cameras.find((camera) => /back|rear|environment/i.test(camera.label));
-        const cameraId = preferred?.id ?? cameras[0].id;
-
         scanner = new Html5Qrcode(scannerId);
-        await scanner.start(
-          cameraId,
-          { fps: 10, qrbox: 250 },
-          (decodedText: string) => {
-            if (lookupStartedRef.current) return;
-            lookupStartedRef.current = true;
-            setBarcode(decodedText);
-            setScanning(false);
-            lookupProduct(decodedText);
-          },
-          () => {
-            // frame-level errors ignored
-          },
-        );
+
+        // Prefer the rear/main camera via facingMode constraints. iOS Safari
+        // often returns empty or misleading device labels, so matching labels
+        // alone can pick the front camera.
+        const startScanner = async (cameraConfig: string | MediaTrackConstraints) => {
+          await scanner!.start(
+            cameraConfig,
+            { fps: 10, qrbox: 250 },
+            (decodedText: string) => {
+              if (lookupStartedRef.current) return;
+              lookupStartedRef.current = true;
+              setBarcode(decodedText);
+              setScanning(false);
+              lookupProduct(decodedText);
+            },
+            () => {
+              // frame-level errors ignored
+            },
+          );
+        };
+
+        try {
+          await startScanner({ facingMode: { ideal: "environment" } });
+        } catch (facingModeErr) {
+          // Fallback to device enumeration if the constraint is rejected.
+          console.debug("[barcode] facingMode start failed, falling back", facingModeErr);
+          const cameras = await Html5Qrcode.getCameras();
+          if (!cameras || cameras.length === 0) {
+            throw new Error("No camera found");
+          }
+          const preferred = cameras.find((camera) => /back|rear|environment/i.test(camera.label));
+          const cameraId = preferred?.id ?? cameras[0].id;
+
+          scanner.clear();
+          scanner = new Html5Qrcode(scannerId);
+          await startScanner(cameraId);
+        }
 
         started = true;
         if (!active) await stopAndClear();
