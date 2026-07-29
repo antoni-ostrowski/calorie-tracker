@@ -9,7 +9,10 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, backTo = "/" }: PageHeaderProps) {
   return (
-    <header className="sticky top-0 z-10 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header
+      className="sticky top-0 z-10 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+      style={{ paddingTop: "max(env(safe-area-inset-top), 2.5rem)" }}
+    >
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" asChild>
           <Link to={backTo}>
