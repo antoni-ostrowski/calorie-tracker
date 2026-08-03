@@ -4,7 +4,7 @@
 
 Personal calorie tracking web app. PWA-ready, mobile-first. Intended for self-hosting. The main focus of the app is the AI estimation feature built to take advantage of OpenCode Go subscription.
 
-> currently hard coded to use "minimax-m3" model to balance out costs with quality
+> currently hard coded to use "gpt-5.6-luna" model without reasoning
 
 ## Features
 
@@ -30,7 +30,7 @@ My main goal with this app was to have the simplest possible way to track calori
 
 ## AI estimation
 
-The fastest way to log food is to take a photo. The app sends the image to the OpenCode API (using the `minimax-m3` model), asks it to guess what the food is and estimate macros, then fills in calories, protein, carbs, fat and a weight for you. You can still edit the grams afterwards and the other numbers rescale automatically. Before you submit photo you can type in details to help model estimate better. (you can also describe food in context without attaching photo)
+The fastest way to log food is to take a photo. The app sends the image to the OpenCode API (using the `gpt-5.6-luna` model without reasoning), asks it to guess what the food is and estimate macros, then fills in calories, protein, carbs, fat and a weight for you. You can still edit the grams afterwards and the other numbers rescale automatically. Before you submit photo you can type in details to help model estimate better. (you can also describe food in context without attaching photo)
 
 It's not going to be perfectly accurate, especially for home-cooked or mixed meals, but it's good enough for me and removes almost all friction from logging.
 
@@ -75,7 +75,7 @@ OPENCODE_API_KEY=your_key_here
 # I dont recommend changing these, they dont really matter
 # SQLite database location. Inside the container this is already set to ./data/app.db.
 DATABASE_URL=./data/app.db
-# Depens on the model, for minimax-m3 thats correct.
+# Depends on the model; this endpoint supports gpt-5.6-luna.
 OPENCODE_API_URL=https://opencode.ai/zen/go/v1
 ```
 

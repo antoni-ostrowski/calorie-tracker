@@ -657,25 +657,21 @@ export const estimateWithAI = createServerFn({ method: "POST" })
 
     console.log("[estimateWithAI] env", {
       apiUrl: env.OPENCODE_API_URL,
-      hasKey: env.OPENCODE_API_KEY,
+      hasKey: Boolean(env.OPENCODE_API_KEY),
     });
 
     const systemPrompt =
       'You are a nutrition assistant. Estimate the calories and macros of the described meal. Respond ONLY with a JSON object in this exact format: {"name": "Meal name", "calories": number, "protein": number, "carbs": number, "fat": number, "grams": number, "confidence": "high|medium|low", "reasoning": "brief explanation"}. All numbers should be for the total meal amount described, not per 100g. Be reasonable and conservative in estimates.';
 
     const userContent = [] as any[];
-    userContent.push({ type: "text", text: data.text });
+    userContent.push({ type: "input_text", text: data.text });
 
     if (data.imageDataUrl) {
       const parsed = parseDataUrl(data.imageDataUrl);
       if (parsed) {
         userContent.push({
-          type: "image",
-          source: {
-            type: "base64",
-            media_type: parsed.mimeType,
-            data: parsed.base64,
-          },
+          type: "input_image",
+          image_url: `data:${parsed.mimeType};base64,${parsed.base64}`,
         });
       } else {
         console.warn("[estimateWithAI] could not parse image data URL");
@@ -683,34 +679,32 @@ export const estimateWithAI = createServerFn({ method: "POST" })
     }
 
     const requestBody = {
-      model: "minimax-m3",
-      system: systemPrompt,
-      messages: [
+      model: "gpt-5.6-luna",
+      reasoning: { effort: "none" },
+      instructions: systemPrompt,
+      input: [
         {
           role: "user",
           content: userContent,
         },
       ],
-      max_tokens: 500,
-      temperature: 0.3,
+      max_output_tokens: 500,
     };
 
     console.log(
       "[estimateWithAI] request body",
       JSON.stringify({
         ...requestBody,
-        messages: requestBody.messages.map((m) => ({
+        input: requestBody.input.map((m) => ({
           role: m.role,
           content: m.content.map((part: any) =>
-            part.type === "image"
-              ? { type: "image", source: { ...part.source, data: "[base64...]" } }
-              : part,
+            part.type === "input_image" ? { type: "input_image", image_url: "[base64...]" } : part,
           ),
         })),
       }),
     );
 
-    const url = `${env.OPENCODE_API_URL}/messages`;
+    const url = `${env.OPENCODE_API_URL}/responses`;
     console.log("[estimateWithAI] fetching", { url });
 
     const res = await fetch(url, {
@@ -744,9 +738,12 @@ export const estimateWithAI = createServerFn({ method: "POST" })
       throw new Error(`AI API returned non-JSON response: ${responseText.slice(0, 300)}`);
     }
 
-    const contentBlocks = json.content || [];
-    const textBlock = contentBlocks.find((block: any) => block.type === "text");
-    const content = textBlock?.text || "";
+    const content =
+      json.output_text ||
+      (json.output || [])
+        .flatMap((item: any) => item.content || [])
+        .find((block: any) => block.type === "output_text")?.text ||
+      "";
     console.log("[estimateWithAI] message content preview", content.slice(0, 500));
 
     const parsed = extractJsonFromContent(content);
