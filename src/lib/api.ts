@@ -120,7 +120,7 @@ export const createEntry = createServerFn({ method: "POST" })
       fat: z.number().optional(),
       grams: z.number().min(0).default(100),
       source: z.enum(["barcode", "search", "ai", "meal"]),
-      aiDetails: z.record(z.any()).optional(),
+      aiDetails: z.record(z.string(), z.any()).optional(),
       mealDetails: z
         .object({
           ingredients: z.array(ingredientSchema),
@@ -660,8 +660,25 @@ export const estimateWithAI = createServerFn({ method: "POST" })
       hasKey: Boolean(env.OPENCODE_API_KEY),
     });
 
-    const systemPrompt =
-      'You are a nutrition assistant. Estimate the calories and macros of the described meal. Respond ONLY with a JSON object in this exact format: {"name": "Meal name", "calories": number, "protein": number, "carbs": number, "fat": number, "grams": number, "confidence": "high|medium|low", "reasoning": "brief explanation"}. All numbers should be for the total meal amount described, not per 100g. Be reasonable and conservative in estimates.';
+    const systemPrompt = `
+You are a nutrition assistant. Estimate the calories and macros of the described meal.
+You estimate nutrition for one meal from text and/or an image.
+
+Return ONLY one valid JSON object:
+{"name":"short meal name","calories":number,"protein":number,"carbs":number,"fat":number,"grams":number,"confidence":"high|medium|low","reasoning":"brief explanation of visible foods and portion assumptions"}
+
+Rules:
+- Estimate the total amount the user describes or shows, not per 100g.
+- Identify only foods supported by the image or user text. Never invent brands, ingredients, sauces, oils, or cooking methods.
+- If details are uncertain, use typical assumptions and lower confidence.
+- Estimate portions conservatively. Do not inflate precision.
+- For mixed dishes, estimate visible components separately, then add them.
+- grams means estimated edible food weight, excluding plates, packaging, and bones.
+- If no image or text gives enough information, make a broad typical estimate and set confidence to low.
+- Use whole numbers for calories and grams. Use numbers, never strings.
+- Keep reasoning brief. Do not include hidden reasoning.
+- Do not include markdown, code fences, or extra text outside the JSON object.
+`;
 
     const userContent = [] as any[];
     userContent.push({ type: "input_text", text: data.text });
@@ -680,7 +697,7 @@ export const estimateWithAI = createServerFn({ method: "POST" })
 
     const requestBody = {
       model: "gpt-5.6-luna",
-      reasoning: { effort: "none" },
+      reasoning: { effort: "medium" },
       instructions: systemPrompt,
       input: [
         {
