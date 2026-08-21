@@ -15,11 +15,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN npm install -g bun
 
 COPY package.json bun.lock ./
-RUN bun install
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install
 
 COPY . .
-RUN mkdir -p data/photos
-RUN bun run build
+RUN mkdir -p data/photos && bun run build
 
 FROM node:22-slim AS runner
 
@@ -32,9 +32,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=builder /app/.output ./.output
 COPY --from=builder /app/package.json ./
-COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/bun.lock ./
 COPY --from=builder /app/drizzle ./drizzle
 COPY --from=builder /app/drizzle.config.ts ./
+
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    npm install -g bun && bun install --production
 
 ENV NODE_ENV=production
 ENV DATABASE_URL=./data/app.db
