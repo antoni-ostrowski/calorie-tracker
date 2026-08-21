@@ -1,0 +1,11 @@
+services:
+  calorie-tracker:
+    build: .
+    volumes:
+      - calorie-data:/app/data
+    environment:
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL}
+volumes:
+  calorie-data:
