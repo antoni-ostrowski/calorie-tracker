@@ -419,14 +419,24 @@ export const deleteMeal = createServerFn({ method: "POST" })
 
 export const createMealEntry = createServerFn({ method: "POST" })
   .inputValidator(
-    z.object({
-      id: z.number(),
-      date: z.string(),
-      grams: z.number().min(1),
-    }),
+    z
+      .object({
+        id: z.number(),
+        date: z.string(),
+        grams: z.number().min(1).optional(),
+        ingredients: z.array(ingredientSchema).min(1).optional(),
+      })
+      .refine((d) => d.grams !== undefined || (d.ingredients && d.ingredients.length > 0), {
+        message: "Either grams or ingredients must be provided",
+      }),
   )
   .handler(async ({ data }) => {
-    console.log("[createMealEntry] called", { id: data.id, date: data.date, grams: data.grams });
+    console.log("[createMealEntry] called", {
+      id: data.id,
+      date: data.date,
+      grams: data.grams,
+      hasIngredients: !!data.ingredients,
+    });
     const session = await getSessionOrThrow();
     const userId = session.user.id;
 
@@ -454,21 +464,55 @@ export const createMealEntry = createServerFn({ method: "POST" })
       day = newDay;
     }
 
-    const ratio = meal.grams > 0 ? data.grams / meal.grams : 0;
-    const calories = Math.round(meal.calories * ratio);
-    const protein = Math.round((meal.protein || 0) * ratio * 10) / 10;
-    const carbs = Math.round((meal.carbs || 0) * ratio * 10) / 10;
-    const fat = Math.round((meal.fat || 0) * ratio * 10) / 10;
+    let calories: number;
+    let protein: number;
+    let carbs: number;
+    let fat: number;
+    let entryGrams: number;
+    let snapshotIngredients: {
+      name: string;
+      grams: number;
+      calories: number;
+      protein: number;
+      carbs: number;
+      fat: number;
+      source: "barcode" | "search";
+    }[];
 
-    const snapshotIngredients = meal.ingredients.map((i) => ({
-      name: i.name,
-      grams: Math.round(i.grams * ratio * 10) / 10,
-      calories: Math.round(i.calories * ratio),
-      protein: Math.round((i.protein || 0) * ratio * 10) / 10,
-      carbs: Math.round((i.carbs || 0) * ratio * 10) / 10,
-      fat: Math.round((i.fat || 0) * ratio * 10) / 10,
-      source: i.source,
-    }));
+    if (data.ingredients && data.ingredients.length > 0) {
+      const totals = totalsFromIngredients(data.ingredients);
+      calories = Math.round(totals.calories);
+      protein = Math.round(totals.protein * 10) / 10;
+      carbs = Math.round(totals.carbs * 10) / 10;
+      fat = Math.round(totals.fat * 10) / 10;
+      entryGrams = Math.round(totals.grams * 10) / 10;
+      snapshotIngredients = data.ingredients.map((i) => ({
+        name: i.name,
+        grams: Math.round(i.grams * 10) / 10,
+        calories: Math.round(i.calories),
+        protein: Math.round((i.protein || 0) * 10) / 10,
+        carbs: Math.round((i.carbs || 0) * 10) / 10,
+        fat: Math.round((i.fat || 0) * 10) / 10,
+        source: i.source,
+      }));
+    } else {
+      const grams = data.grams as number;
+      const ratio = meal.grams > 0 ? grams / meal.grams : 0;
+      calories = Math.round(meal.calories * ratio);
+      protein = Math.round((meal.protein || 0) * ratio * 10) / 10;
+      carbs = Math.round((meal.carbs || 0) * ratio * 10) / 10;
+      fat = Math.round((meal.fat || 0) * ratio * 10) / 10;
+      entryGrams = grams;
+      snapshotIngredients = meal.ingredients.map((i) => ({
+        name: i.name,
+        grams: Math.round(i.grams * ratio * 10) / 10,
+        calories: Math.round(i.calories * ratio),
+        protein: Math.round((i.protein || 0) * ratio * 10) / 10,
+        carbs: Math.round((i.carbs || 0) * ratio * 10) / 10,
+        fat: Math.round((i.fat || 0) * ratio * 10) / 10,
+        source: i.source,
+      }));
+    }
 
     let filePath = "";
     if (meal.filePath) {
@@ -499,7 +543,7 @@ export const createMealEntry = createServerFn({ method: "POST" })
         protein,
         carbs,
         fat,
-        grams: data.grams,
+        grams: entryGrams,
         source: "meal",
         mealDetails: JSON.stringify({ ingredients: snapshotIngredients }),
         filePath,
