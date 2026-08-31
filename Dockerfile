@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     g++ \
     ca-certificates \
     unzip \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install bun (same Node 22 ABI as runner)
@@ -28,7 +29,14 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libsqlite3-0 \
     ca-certificates \
+    curl \
+    bash \
     && rm -rf /var/lib/apt/lists/*
+
+# Install opencode CLI via official install script and add to PATH
+# Matches user's other project: RUN curl -fsSL https://opencode.ai/install | bash ; ENV PATH="/root/.opencode/bin:$PATH"
+RUN curl -fsSL https://opencode.ai/install | bash
+ENV PATH="/root/.opencode/bin:$PATH"
 
 COPY --from=builder /app/.output ./.output
 COPY --from=builder /app/package.json ./
