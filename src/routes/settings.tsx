@@ -2,7 +2,22 @@ import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { LogOut, Minus, Plus, Save, Settings2, Target, Utensils } from "lucide-react";
+import {
+  LogOut,
+  Minus,
+  Plus,
+  Save,
+  Settings2,
+  Target,
+  Utensils,
+  Sparkles,
+  Eye,
+  EyeOff,
+  Trash2,
+  FlaskConical,
+  ShieldCheck,
+  ExternalLink,
+} from "lucide-react";
 import { PageHeader } from "~/components/page-header";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
@@ -16,6 +31,9 @@ import {
   createMeal,
   updateMeal,
   deleteMeal,
+  getAiSettings,
+  updateAiSettings,
+  testAiConnection,
 } from "~/lib/api";
 import { signOut } from "~/lib/auth-client";
 import { MealBuilderDialog } from "~/components/meal-builder-dialog";
@@ -98,6 +116,72 @@ function SettingsPage() {
   });
 
   const changed = settings ? draft !== settings.defaultCalorieGoal : false;
+
+  // AI Settings
+  const { data: aiSettings, isLoading: aiLoading } = useQuery({
+    queryKey: ["aiSettings"],
+    queryFn: () => getAiSettings(),
+  });
+
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [aiModel, setAiModel] = useState("");
+  const [aiInitialized, setAiInitialized] = useState(false);
+
+  useEffect(() => {
+    if (aiSettings && !aiInitialized) {
+      setAiModel(aiSettings.model || "");
+      setAiInitialized(true);
+    }
+  }, [aiSettings, aiInitialized]);
+
+  const aiSaveMutation = useMutation({
+    mutationFn: async () => {
+      const payload: { apiKey?: string; model?: string } = {};
+      if (aiApiKey.trim() !== "") {
+        payload.apiKey = aiApiKey.trim();
+      }
+      if (aiSettings) {
+        if (aiModel.trim() !== (aiSettings.model || "")) {
+          payload.model = aiModel.trim();
+        }
+        if (aiModel.trim() === "" && aiSettings.model) payload.model = "";
+      } else {
+        if (aiModel.trim()) payload.model = aiModel.trim();
+      }
+      if (Object.keys(payload).length === 0) {
+        throw new Error("Nothing to save");
+      }
+      return updateAiSettings({ data: payload });
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["aiSettings"] });
+      setAiApiKey("");
+      toast.success(
+        data.hasApiKey ? "AI settings saved" : "AI settings updated (key cleared or unchanged)",
+      );
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const aiClearMutation = useMutation({
+    mutationFn: () => updateAiSettings({ data: { apiKey: "" } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["aiSettings"] });
+      setAiApiKey("");
+      toast.success("API key cleared");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const aiTestMutation = useMutation({
+    mutationFn: () => testAiConnection({ data: { text: "one apple, ~150g" } }),
+    onSuccess: () => toast.success("AI connection OK"),
+    onError: (err) => toast.error(`Test failed: ${err.message}`),
+  });
+
+  const hasAiChanges =
+    aiApiKey.trim() !== "" || (aiSettings ? aiModel.trim() !== (aiSettings.model || "") : false);
 
   async function handleSignOut() {
     const { error } = await signOut();
@@ -228,6 +312,178 @@ function SettingsPage() {
         <p className="mt-4 text-center text-xs leading-relaxed text-muted-foreground">
           This becomes default for new days. Today’s goal updates too.
         </p>
+
+        {/* AI Configuration */}
+        <Card className="mt-8 overflow-hidden rounded-3xl border shadow-sm">
+          <CardContent className="p-6">
+            <div className="mb-5 flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                <Sparkles className="size-5" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">AI Configuration</p>
+                <p className="text-xs text-muted-foreground">Per-user, encrypted at rest</p>
+              </div>
+              <div className="flex items-center gap-1.5 rounded-full border bg-muted/50 px-2.5 py-1 text-xs">
+                <ShieldCheck className="size-3.5 text-emerald-600" />
+                <span className="font-medium">AES-256-GCM</span>
+              </div>
+            </div>
+
+            {aiLoading ? (
+              <div className="flex justify-center py-6">
+                <div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              </div>
+            ) : (
+              <>
+                <div className="mb-4 rounded-xl bg-muted/50 p-3 text-xs leading-relaxed text-muted-foreground">
+                  <p>
+                    Your API key is encrypted with <span className="font-medium">AES-256-GCM</span>{" "}
+                    using the server secret (
+                    <code className="rounded bg-background px-1">BETTER_AUTH_SECRET</code>). A
+                    database dump alone cannot reveal it. Your friend can safely store his own key
+                    here. Leave the key empty to keep the current one.
+                  </p>
+                  {aiSettings?.hasApiKey ? (
+                    <p className="mt-2 text-emerald-600 dark:text-emerald-400">
+                      Personal key set: <span className="font-mono">{aiSettings.maskedKey}</span>{" "}
+                      (encrypted at rest — only last 4 chars shown). Each user has their own key.
+                    </p>
+                  ) : (
+                    <p className="mt-2 text-muted-foreground">
+                      No key set — requests will be sent without auth. Works for free/local models
+                      (e.g. Ollama); set a key if your provider requires it. No server fallback.
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="ai-api-key" className="text-xs font-medium">
+                      API key{" "}
+                      {aiSettings?.hasApiKey
+                        ? `(current: ${aiSettings.maskedKey})`
+                        : "(optional — leave empty for free models)"}
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="ai-api-key"
+                        type={showKey ? "text" : "password"}
+                        placeholder={
+                          aiSettings?.hasApiKey
+                            ? "•••••••••••• (leave empty to keep)"
+                            : "sk-... (optional for free models)"
+                        }
+                        value={aiApiKey}
+                        onChange={(e) => setAiApiKey(e.target.value)}
+                        className="pr-10"
+                        autoComplete="off"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowKey((v) => !v)}
+                        className="absolute right-2 top-1/2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md hover:bg-muted"
+                      >
+                        {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                      </button>
+                    </div>
+                    {aiSettings?.hasApiKey && (
+                      <button
+                        onClick={() => aiClearMutation.mutate()}
+                        disabled={aiClearMutation.isPending}
+                        className="flex items-center gap-1 self-start text-xs text-destructive hover:underline"
+                      >
+                        <Trash2 className="size-3" />
+                        Clear stored key
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="ai-model" className="text-xs font-medium">
+                      Model — full opencode ID (e.g. opencode/mimo-v2.5-free)
+                    </Label>
+                    <Input
+                      id="ai-model"
+                      list="ai-model-list"
+                      placeholder="opencode/mimo-v2.5-free"
+                      value={aiModel}
+                      onChange={(e) => setAiModel(e.target.value)}
+                    />
+                    <datalist id="ai-model-list">
+                      <option value="opencode/mimo-v2.5-free" />
+                      <option value="opencode/muse-spark-1.2-contributor-free" />
+                      <option value="opencode-go/gpt-5.6-luna" />
+                      <option value="opencode/gpt-5.6-luna" />
+                      <option value="opencode/mimo-v2.5" />
+                      <option value="opencode-go/mimo-v2.5" />
+                      <option value="grok-4.6" />
+                      <option value="gpt-5.6-luna" />
+                      <option value="muse-spark-1.2-contributor" />
+                      <option value="mimo-v2.5-free" />
+                      <option value="mimo-v2.5" />
+                      <option value="big-pickle" />
+                      <option value="minimax-m3" />
+                      <option value="qwen3.8-max" />
+                      <option value="hy4-preview" />
+                    </datalist>
+                    <p className="text-xs text-muted-foreground">
+                      Full opencode model ID from{" "}
+                      <code className="rounded bg-muted px-1">opencode models</code> (e.g.{" "}
+                      <code className="rounded bg-muted px-1">opencode/mimo-v2.5-free</code>,{" "}
+                      <code className="rounded bg-muted px-1">opencode-go/mimo-v2.5</code>). CLI
+                      handles routing — no URL needed. Token encrypted, optional for free.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1 rounded-xl"
+                      onClick={() => aiSaveMutation.mutate()}
+                      disabled={!hasAiChanges || aiSaveMutation.isPending}
+                    >
+                      {aiSaveMutation.isPending ? (
+                        <span className="size-4 animate-spin rounded-full border-2 border-primary-foreground/30 border-t-primary-foreground" />
+                      ) : (
+                        <Save className="mr-2 size-4" />
+                      )}
+                      Save AI config
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="rounded-xl"
+                      onClick={() => aiTestMutation.mutate()}
+                      disabled={aiTestMutation.isPending}
+                    >
+                      {aiTestMutation.isPending ? (
+                        <span className="size-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                      ) : (
+                        <FlaskConical className="mr-2 size-4" />
+                      )}
+                      Test
+                    </Button>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <ExternalLink className="size-3" />
+                    <span>
+                      Get key at{" "}
+                      <a
+                        href="https://opencode.ai"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline hover:text-foreground"
+                      >
+                        opencode.ai
+                      </a>{" "}
+                      or your OpenAI-compatible provider.
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
 
         <div className="mt-8">
           <div className="mb-4 flex items-center justify-between">

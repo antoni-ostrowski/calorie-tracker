@@ -3,10 +3,12 @@ import { eq, desc, and } from "drizzle-orm";
 import { z } from "zod";
 import fs from "fs/promises";
 import path from "path";
+import os from "os";
+import { spawn } from "child_process";
 import { db } from "~/db";
 import { days, entries, mealIngredients, meals, settings } from "~/db/schema";
-import { env } from "~/env";
 import { getSessionOrThrow } from "~/lib/auth-functions";
+import { decryptToken, encryptToken, maskToken } from "~/lib/crypto";
 import type { MealWithIngredients } from "~/db/schema";
 
 async function getOrCreateSettings(userId: string) {
@@ -23,7 +25,12 @@ async function getOrCreateSettings(userId: string) {
 export const getSettings = createServerFn({ method: "GET" }).handler(async () => {
   console.log("[getSettings] called");
   const session = await getSessionOrThrow();
-  return getOrCreateSettings(session.user.id);
+  const row = await getOrCreateSettings(session.user.id);
+  // Don't leak encrypted token to client
+  const { aiApiKeyEncrypted: _omit, ...safe } = row as typeof row & {
+    aiApiKeyEncrypted?: string | null;
+  };
+  return safe;
 });
 
 export const updateSettings = createServerFn({ method: "POST" })
@@ -37,8 +44,162 @@ export const updateSettings = createServerFn({ method: "POST" })
       .set({ defaultCalorieGoal: data.defaultCalorieGoal, updatedAt: new Date() })
       .where(eq(settings.id, row.id))
       .returning();
-    return updated;
+    const { aiApiKeyEncrypted: _omit, ...safe } = updated as typeof updated & {
+      aiApiKeyEncrypted?: string | null;
+    };
+    return safe;
   });
+
+// --- AI Settings (per-user, encrypted at rest) ---
+// Now via opencode CLI: only model + key are stored, no URLs.
+// The CLI handles provider routing internally via `opencode run -m <fullModel>` and `OPENCODE_API_KEY` env.
+
+export const getAiSettings = createServerFn({ method: "GET" }).handler(async () => {
+  console.log("[getAiSettings] called");
+  const session = await getSessionOrThrow();
+  const row = await getOrCreateSettings(session.user.id);
+
+  let hasApiKey = false;
+  let maskedKey: string | null = null;
+  if (row.aiApiKeyEncrypted) {
+    try {
+      const plain = decryptToken(row.aiApiKeyEncrypted);
+      hasApiKey = !!plain;
+      maskedKey = plain ? maskToken(plain) : null;
+    } catch (e) {
+      console.error("[getAiSettings] failed to decrypt token", e);
+      hasApiKey = false;
+    }
+  }
+
+  // Only model is per-user now; URL is gone — opencode CLI routes via model ID (e.g. opencode/mimo-v2.5-free)
+  const model = row.aiModel || "opencode/mimo-v2.5-free";
+  const source = row.aiApiKeyEncrypted ? "user" : "none";
+
+  return {
+    hasApiKey,
+    maskedKey,
+    model,
+    source,
+  };
+});
+
+export const updateAiSettings = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      apiKey: z.string().optional(), // empty string means clear, undefined means leave unchanged
+      model: z.string().optional(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    console.log("[updateAiSettings] called", {
+      hasApiKey: data.apiKey !== undefined ? (data.apiKey ? "***" : "(clear)") : "(unchanged)",
+      model: data.model,
+    });
+    const session = await getSessionOrThrow();
+    const row = await getOrCreateSettings(session.user.id);
+
+    const updates: Record<string, unknown> = {
+      updatedAt: new Date(),
+    };
+
+    if (data.apiKey !== undefined) {
+      const trimmed = data.apiKey.trim();
+      if (trimmed === "") {
+        updates.aiApiKeyEncrypted = null;
+      } else {
+        if (trimmed.length < 8) {
+          throw new Error("API key seems too short");
+        }
+        updates.aiApiKeyEncrypted = encryptToken(trimmed);
+      }
+    }
+
+    if (data.model !== undefined) {
+      const trimmed = data.model.trim();
+      if (trimmed === "") {
+        updates.aiModel = null;
+      } else {
+        if (trimmed.length > 120) throw new Error("Model name too long");
+        // Full model ID as shown in `opencode models` (e.g. opencode/mimo-v2.5-free, opencode-go/mimo-v2.5)
+        updates.aiModel = trimmed;
+      }
+    }
+
+    // Keep aiApiUrl for backward compat but ignore it — opencode CLI doesn't need it
+    if (row.aiApiUrl) {
+      // leave as-is; no longer used
+    }
+
+    const [updated] = await db
+      .update(settings)
+      .set(updates)
+      .where(eq(settings.id, row.id))
+      .returning();
+
+    let maskedKey: string | null = null;
+    let hasApiKey = false;
+    if (updated.aiApiKeyEncrypted) {
+      try {
+        const plain = decryptToken(updated.aiApiKeyEncrypted);
+        hasApiKey = !!plain;
+        maskedKey = plain ? maskToken(plain) : null;
+      } catch {
+        hasApiKey = false;
+      }
+    }
+
+    return {
+      hasApiKey,
+      maskedKey,
+      model: updated.aiModel || "opencode/mimo-v2.5-free",
+      source: updated.aiApiKeyEncrypted ? "user" : "none",
+    };
+  });
+
+export const testAiConnection = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ text: z.string().default("test") }))
+  .handler(async ({ data }) => {
+    console.log("[testAiConnection] called");
+    const session = await getSessionOrThrow();
+    const config = await resolveAiConfig(session.user.id);
+    const result = await callAiViaOpencode({
+      apiKey: config.apiKey,
+      model: config.model,
+      text: data.text || "Estimate: one apple",
+      imageDataUrl: undefined,
+    });
+    return {
+      success: true as const,
+      preview: result.content.slice(0, 200),
+      parsedPreview: JSON.stringify(result.parsed).slice(0, 500),
+    };
+  });
+
+async function resolveAiConfig(userId: string): Promise<{
+  apiKey: string | null;
+  model: string;
+  source: "user" | "none";
+}> {
+  const row = await getOrCreateSettings(userId);
+  let apiKey: string | null = null;
+  let source: "user" | "none" = "none";
+
+  if (row.aiApiKeyEncrypted) {
+    try {
+      const decrypted = decryptToken(row.aiApiKeyEncrypted);
+      if (decrypted) {
+        apiKey = decrypted;
+        source = "user";
+      }
+    } catch (e) {
+      console.error("[resolveAiConfig] decrypt failed", e);
+    }
+  }
+
+  const model = row.aiModel || "opencode/mimo-v2.5-free";
+  return { apiKey, model, source };
+}
 
 export const getDayByDate = createServerFn({ method: "GET" })
   .inputValidator(z.object({ date: z.string() }))
@@ -690,6 +851,184 @@ export const searchFood = createServerFn({ method: "GET" })
     });
   });
 
+// System prompt used for all AI providers
+const AI_SYSTEM_PROMPT = `
+ You are a nutrition assistant. Estimate the calories and macros of the described meal.
+ You estimate nutrition for one meal from text and/or an image.
+ 
+ Return ONLY one valid JSON object:
+ {"name":"short meal name","calories":number,"protein":number,"carbs":number,"fat":number,"grams":number,"confidence":"high|medium|low","reasoning":"brief explanation of visible foods and portion assumptions"}
+ 
+ Rules:
+ - Estimate the total amount the user describes or shows, not per 100g.
+ - Identify only foods supported by the image or user text. Never invent brands, ingredients, sauces, oils, or cooking methods.
+ - If details are uncertain, use typical assumptions and lower confidence.
+ - Estimate portions conservatively. Do not inflate precision.
+ - For mixed dishes, estimate visible components separately, then add them.
+ - grams means estimated edible food weight, excluding plates, packaging, and bones.
+ - If no image or text gives enough information, make a broad typical estimate and set confidence to low.
+ - Use whole numbers for calories and grams. Use numbers, never strings.
+ - Keep reasoning brief. Do not include hidden reasoning.
+ - Do not include markdown, code fences, or extra text outside the JSON object.
+ `;
+
+function extractTextFromOpencodeStream(stdout: string): string {
+  const texts: string[] = [];
+  for (const line of stdout.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const obj = JSON.parse(trimmed);
+      // opencode run --format json emits {type:"text", part:{type:"text", text:"..."}}
+      if (obj.type === "text" && obj.part?.text) {
+        texts.push(obj.part.text);
+      } else if (obj.part?.type === "text" && obj.part?.text) {
+        texts.push(obj.part.text);
+      } else if (typeof obj.text === "string" && obj.type !== "tool_use") {
+        texts.push(obj.text);
+      }
+    } catch {
+      // not JSON, maybe plain text
+      if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+        // try extract json later
+        texts.push(trimmed);
+      }
+    }
+  }
+  // Join all text parts; last one is usually the final answer
+  return texts.join("\n");
+}
+
+async function runOpencodeCli(
+  args: string[],
+  env: Record<string, string>,
+  timeoutMs = 60000,
+): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("opencode", args, {
+      env: { ...process.env, ...env },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      setTimeout(() => {
+        if (!child.killed) child.kill("SIGKILL");
+      }, 5000);
+    }, timeoutMs);
+
+    child.stdout?.on("data", (d) => (stdout += d.toString()));
+    child.stderr?.on("data", (d) => (stderr += d.toString()));
+    child.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (timedOut) {
+        reject(
+          new Error(
+            `opencode run timed out after ${timeoutMs}ms. stdout: ${stdout.slice(0, 500)} stderr: ${stderr.slice(0, 500)}`,
+          ),
+        );
+      } else {
+        resolve({ stdout, stderr, exitCode: code });
+      }
+    });
+  });
+}
+
+async function callAiViaOpencode(opts: {
+  apiKey: string | null;
+  model: string;
+  text: string;
+  imageDataUrl?: string;
+}): Promise<{ content: string; raw: unknown; parsed: unknown }> {
+  const prompt = `${AI_SYSTEM_PROMPT}\n\nUser request: ${opts.text}\n\nRemember: Return ONLY the JSON object, no markdown.`;
+  const args: string[] = ["run", "-m", opts.model, "--format", "json"];
+  let tmpImagePath: string | null = null;
+
+  try {
+    if (opts.imageDataUrl) {
+      const parsed = parseDataUrl(opts.imageDataUrl);
+      if (parsed) {
+        const ext = parsed.mimeType.split("/")[1] || "jpg";
+        const tmpFile = path.join(
+          os.tmpdir(),
+          `ai-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`,
+        );
+        await fs.writeFile(tmpFile, Buffer.from(parsed.base64, "base64"));
+        tmpImagePath = tmpFile;
+        // opencode run supports -f / --file to attach file to message
+        // Use -- separator before prompt so prompt isn't mistaken for file when -f is present
+        args.push("-f", tmpFile);
+      } else {
+        console.warn(
+          "[callAiViaOpencode] could not parse image data URL, proceeding without image",
+        );
+      }
+    }
+
+    args.push("--", prompt);
+
+    const env: Record<string, string> = {};
+    if (opts.apiKey) {
+      env.OPENCODE_API_KEY = opts.apiKey;
+    }
+    // Ensure opencode can find itself via PATH (Docker sets /root/.opencode/bin)
+    // No need to set other envs; just pass API key.
+
+    console.log("[callAiViaOpencode] spawning", `opencode ${args.slice(0, 4).join(" ")} ...`, {
+      model: opts.model,
+      hasKey: !!opts.apiKey,
+      hasImage: !!tmpImagePath,
+    });
+
+    const { stdout, stderr, exitCode } = await runOpencodeCli(args, env);
+
+    console.log(
+      "[callAiViaOpencode] exit",
+      exitCode,
+      "stdout len",
+      stdout.length,
+      "stderr len",
+      stderr.length,
+    );
+    if (stderr) console.log("[callAiViaOpencode] stderr preview", stderr.slice(0, 1000));
+    console.log("[callAiViaOpencode] stdout preview", stdout.slice(0, 1000));
+
+    if (exitCode !== 0 && !stdout.trim()) {
+      throw new Error(
+        `opencode run failed (exit ${exitCode}): ${stderr.slice(0, 1000) || "no output"}`,
+      );
+    }
+
+    const content = extractTextFromOpencodeStream(stdout);
+    console.log("[callAiViaOpencode] extracted text preview", content.slice(0, 500));
+
+    if (!content.trim()) {
+      // Fallback: try raw stdout as content
+      const fallback = stdout.trim();
+      if (!fallback)
+        throw new Error(`opencode run produced no text output. stderr: ${stderr.slice(0, 500)}`);
+      const parsedFallback = extractJsonFromContent(fallback);
+      return { content: fallback, raw: stdout, parsed: parsedFallback };
+    }
+
+    const parsed = extractJsonFromContent(content);
+    return { content, raw: stdout, parsed };
+  } finally {
+    if (tmpImagePath) {
+      try {
+        await fs.unlink(tmpImagePath);
+      } catch {}
+    }
+  }
+}
+
 export const estimateWithAI = createServerFn({ method: "POST" })
   .inputValidator(z.object({ text: z.string(), imageDataUrl: z.string().optional() }))
   .handler(async ({ data }) => {
@@ -699,115 +1038,27 @@ export const estimateWithAI = createServerFn({ method: "POST" })
       imageLength: data.imageDataUrl?.length,
     });
 
-    console.log("[estimateWithAI] env", {
-      apiUrl: env.OPENCODE_API_URL,
-      hasKey: Boolean(env.OPENCODE_API_KEY),
+    const session = await getSessionOrThrow();
+    const config = await resolveAiConfig(session.user.id);
+
+    console.log("[estimateWithAI] resolved config", {
+      model: config.model,
+      hasKey: !!config.apiKey,
     });
 
-    const systemPrompt = `
-You are a nutrition assistant. Estimate the calories and macros of the described meal.
-You estimate nutrition for one meal from text and/or an image.
-
-Return ONLY one valid JSON object:
-{"name":"short meal name","calories":number,"protein":number,"carbs":number,"fat":number,"grams":number,"confidence":"high|medium|low","reasoning":"brief explanation of visible foods and portion assumptions"}
-
-Rules:
-- Estimate the total amount the user describes or shows, not per 100g.
-- Identify only foods supported by the image or user text. Never invent brands, ingredients, sauces, oils, or cooking methods.
-- If details are uncertain, use typical assumptions and lower confidence.
-- Estimate portions conservatively. Do not inflate precision.
-- For mixed dishes, estimate visible components separately, then add them.
-- grams means estimated edible food weight, excluding plates, packaging, and bones.
-- If no image or text gives enough information, make a broad typical estimate and set confidence to low.
-- Use whole numbers for calories and grams. Use numbers, never strings.
-- Keep reasoning brief. Do not include hidden reasoning.
-- Do not include markdown, code fences, or extra text outside the JSON object.
-`;
-
-    const userContent = [] as any[];
-    userContent.push({ type: "input_text", text: data.text });
-
-    if (data.imageDataUrl) {
-      const parsed = parseDataUrl(data.imageDataUrl);
-      if (parsed) {
-        userContent.push({
-          type: "input_image",
-          image_url: `data:${parsed.mimeType};base64,${parsed.base64}`,
-        });
-      } else {
-        console.warn("[estimateWithAI] could not parse image data URL");
-      }
-    }
-
-    const requestBody = {
-      model: "gpt-5.6-luna",
-      reasoning: { effort: "medium" },
-      instructions: systemPrompt,
-      input: [
-        {
-          role: "user",
-          content: userContent,
-        },
-      ],
-      max_output_tokens: 500,
-    };
-
-    console.log(
-      "[estimateWithAI] request body",
-      JSON.stringify({
-        ...requestBody,
-        input: requestBody.input.map((m) => ({
-          role: m.role,
-          content: m.content.map((part: any) =>
-            part.type === "input_image" ? { type: "input_image", image_url: "[base64...]" } : part,
-          ),
-        })),
-      }),
-    );
-
-    const url = `${env.OPENCODE_API_URL}/responses`;
-    console.log("[estimateWithAI] fetching", { url });
-
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": env.OPENCODE_API_KEY,
-        Authorization: `Bearer ${env.OPENCODE_API_KEY}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    const responseText = await res.text();
-    console.log("[estimateWithAI] response", {
-      status: res.status,
-      statusText: res.statusText,
-      preview: responseText.slice(0, 1000),
-    });
-
-    if (!res.ok) {
+    if (!config.model) {
       throw new Error(
-        `AI API error: ${res.status} ${res.statusText} — ${responseText.slice(0, 300)}`,
+        "AI not configured. Go to Settings → AI Configuration and set model (e.g. opencode/mimo-v2.5-free). Token is set there if your model requires it.",
       );
     }
 
-    let json;
-    try {
-      json = JSON.parse(responseText);
-    } catch (parseErr) {
-      console.error("[estimateWithAI] JSON parse failed", parseErr);
-      throw new Error(`AI API returned non-JSON response: ${responseText.slice(0, 300)}`);
-    }
+    const { parsed } = await callAiViaOpencode({
+      apiKey: config.apiKey,
+      model: config.model,
+      text: data.text,
+      imageDataUrl: data.imageDataUrl,
+    });
 
-    const content =
-      json.output_text ||
-      (json.output || [])
-        .flatMap((item: any) => item.content || [])
-        .find((block: any) => block.type === "output_text")?.text ||
-      "";
-    console.log("[estimateWithAI] message content preview", content.slice(0, 500));
-
-    const parsed = extractJsonFromContent(content);
     console.log("[estimateWithAI] extracted JSON", parsed);
 
     const validated = aiEstimateResponseSchema.safeParse(parsed);

@@ -27,6 +27,10 @@ export const settings = sqliteTable(
     id: integer("id", { mode: "number" }).primaryKey({ autoIncrement: true }),
     userId: text("user_id").notNull(),
     defaultCalorieGoal: integer("default_calorie_goal").notNull().default(2000),
+    // Per-user AI configuration - api key is stored encrypted (AES-256-GCM with server secret)
+    aiApiKeyEncrypted: text("ai_api_key_encrypted"),
+    aiModel: text("ai_model"),
+    aiApiUrl: text("ai_api_url"),
     updatedAt: integer("updated_at", { mode: "timestamp" })
       .notNull()
       .$defaultFn(() => new Date()),

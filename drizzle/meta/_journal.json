@@ -57,6 +57,13 @@
       "when": 1784643761071,
       "tag": "0007_big_multiple_man",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1788179026724,
+      "tag": "0008_last_rachel_grey",
+      "breakpoints": true
     }
   ]
 }
